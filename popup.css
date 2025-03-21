@@ -1,0 +1,258 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  margin: 0;
+  padding: 0;
+  width: 400px;
+  color: #333;
+}
+
+.container {
+  padding: 16px;
+}
+
+h1 {
+  font-size: 18px;
+  margin-top: 0;
+  color: #c5050c; /* UW-Madison red */
+}
+
+h2 {
+  font-size: 16px;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+h3 {
+  font-size: 14px;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+button {
+  background-color: #c5050c;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:hover {
+  background-color: #9b0000;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 12px;
+  font-style: italic;
+  color: #666;
+}
+
+.error {
+  color: #c5050c;
+}
+
+.success {
+  color: #198754;
+  white-space: pre-line;
+  padding: 10px;
+  background-color: #e8f6f0;
+  border-radius: 4px;
+  border-left: 4px solid #198754;
+  margin-top: 12px;
+}
+
+.hidden {
+  display: none;
+}
+
+#courses-list {
+  margin-bottom: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.course-item {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.course-item:last-child {
+  border-bottom: none;
+}
+
+.course-name {
+  font-weight: bold;
+}
+
+.course-details {
+  font-size: 13px;
+  color: #555;
+}
+
+.options {
+  margin-bottom: 16px;
+}
+
+.option-row {
+  margin-bottom: 8px;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+}
+
+#download-btn {
+  background-color: #0479a8; /* UW-Madison blue */
+}
+
+#download-btn:hover {
+  background-color: #034e6c;
+}
+
+#reset-btn {
+  background-color: #666;
+}
+
+#reset-btn:hover {
+  background-color: #555;
+}
+
+/* Calendar selection styles */
+.calendar-selection {
+  margin-bottom: 20px;
+}
+
+.calendar-selection h3 {
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.calendar-selection p {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 10px;
+}
+
+.calendar-options {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.calendar-option {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.calendar-option:hover {
+  background-color: #f5f5f5;
+  border-color: #b5b5b5;
+}
+
+.calendar-option.selected {
+  border-color: #0479a8;
+  background-color: rgba(4, 121, 168, 0.1);
+}
+
+.calendar-logo {
+  width: 32px;
+  height: 32px;
+  display: block;
+  margin: 0 auto 8px;
+}
+
+.calendar-option span {
+  font-size: 12px;
+  display: block;
+}
+
+/* Update the export button for consistency */
+#export-btn {
+  background-color: #0479a8; /* UW-Madison blue */
+}
+
+#export-btn:hover {
+  background-color: #034e6c;
+}
+
+/* Fallback download section */
+#fallback-download {
+  margin-top: 15px;
+  padding: 12px;
+  background-color: #fef9e6;
+  border: 1px solid #f9dc5c;
+  border-radius: 6px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+#fallback-download.hidden {
+  display: none;
+}
+
+#fallback-download p {
+  font-size: 13px;
+  color: #664d03;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+#fallback-download-btn {
+  background-color: #0479a8;
+  margin: 8px auto;
+  display: block;
+}
+
+#fallback-download-btn:hover {
+  background-color: #034e6c;
+}
+
+/* Calendar Instructions */
+.calendar-instructions {
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.instruction-panel {
+  margin-bottom: 0;
+}
+
+.instruction-panel h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #0479a8;
+  font-size: 14px;
+}
+
+.instruction-panel ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.instruction-panel li {
+  margin-bottom: 5px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.instruction-panel li:last-child {
+  margin-bottom: 0;
+} 

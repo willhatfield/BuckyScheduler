@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>UW-Madison Schedule to Calendar</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>UW Schedule to Calendar</h1>
+    
+    <div id="initial-view">
+      <p>Extract your course schedule and export it to your preferred calendar application.</p>
+      <button id="extract-btn">Extract Schedule</button>
+      <div id="status" class="status"></div>
+    </div>
+    
+    <div id="results-view" class="hidden">
+      <h2>Extracted Courses</h2>
+      <div id="courses-list"></div>
+      
+      <div class="options">
+        <h3>Options</h3>
+        <div class="option-row">
+          <label>
+            <input type="checkbox" id="add-alerts" checked>
+            Add 15-minute reminder alerts
+          </label>
+        </div>
+        <div class="option-row">
+          <label>
+            <input type="checkbox" id="respect-holidays" checked>
+            Exclude university holidays
+          </label>
+        </div>
+      </div>
+      
+      <div class="calendar-selection">
+        <h3>Choose Your Calendar</h3>
+        <p>Select where you want to export your schedule</p>
+        <div class="calendar-options">
+          <div id="apple-calendar" class="calendar-option">
+            <img src="images/apple-calendar.png" alt="Apple Calendar" class="calendar-logo" />
+            <span>Apple Calendar</span>
+          </div>
+          <div id="google-calendar" class="calendar-option">
+            <img src="images/google-calendar.png" alt="Google Calendar" class="calendar-logo" />
+            <span>Google Calendar</span>
+          </div>
+          <div id="outlook-calendar" class="calendar-option">
+            <img src="images/outlook-calendar.png" alt="Outlook" class="calendar-logo" />
+            <span>Outlook</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Calendar-specific instructions -->
+      <div id="calendar-instructions" class="calendar-instructions">
+        <div id="apple-instructions" class="instruction-panel">
+          <h4>Apple Calendar Instructions</h4>
+          <ol>
+            <li>Click "Export Schedule" to download the ICS file</li>
+            <li>The file should open automatically in Apple Calendar</li>
+            <li>If prompted, confirm you want to add these events</li>
+            <li>Choose which calendar to add the events to</li>
+          </ol>
+        </div>
+        
+        <div id="google-instructions" class="instruction-panel hidden">
+          <h4>Google Calendar Instructions</h4>
+          <ol>
+            <li>Click "Export Schedule" to download the ICS file</li>
+            <li>A Google Calendar tab will open</li>
+            <li>Click the settings gear icon, then "Settings"</li>
+            <li>Click "Import & Export" on the left menu</li>
+            <li>Click "Select file from your computer" and choose the downloaded ICS file</li>
+            <li>Select which calendar to add the events to</li>
+            <li>Click "Import"</li>
+          </ol>
+        </div>
+        
+        <div id="outlook-instructions" class="instruction-panel hidden">
+          <h4>Outlook Instructions</h4>
+          <ol>
+            <li>Click "Export Schedule" to download the ICS file</li>
+            <li>An Outlook Calendar tab will open</li>
+            <li>Click "Add calendar" at the top of the page</li>
+            <li>Select "Upload from file"</li>
+            <li>Browse to the downloaded ICS file and select it</li>
+            <li>Click "Open" and then follow the prompts to complete the import</li>
+          </ol>
+        </div>
+      </div>
+      
+      <button id="export-btn" class="primary-btn">Export Schedule</button>
+      <button id="reset-btn" class="secondary-btn">Reset</button>
+      
+      <div id="fallback-download" class="hidden">
+        <p>If the download didn't start automatically, click the button below:</p>
+        <button id="fallback-download-btn" class="primary-btn">Manual Download</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="moment.min.js"></script>
+  <script src="ics.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html> 
