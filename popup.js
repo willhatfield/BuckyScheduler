@@ -174,9 +174,12 @@ function generateCalendarData() {
   const respectHolidays = respectHolidaysCheckbox.checked;
   const addAlerts = addAlertsCheckbox.checked;
   console.log("Processing", extractedCourses.length, "courses...");
+  console.log(`Respect holidays option: ${respectHolidays}`);
   
   // Process each course
   extractedCourses.forEach(course => {
+    console.log(`Starting to process course: ${course.name}`);
+    
     // Process the main section if available
     if (course.schedule && course.dates) {
       processSection(course, course.schedule, course.location, course.dates, addAlerts, respectHolidays, academicCalendar);
@@ -208,7 +211,23 @@ function generateCalendarData() {
   
   // Check if any events were added to the calendar
   const eventCount = cal.events().length;
-  console.log("Events added to calendar:", eventCount);
+  console.log("TOTAL EVENTS added to calendar:", eventCount);
+  console.log("Event breakdown by title:");
+  
+  // Count events by title for detailed breakdown
+  const eventsByTitle = {};
+  cal.events().forEach(event => {
+    const title = event.title;
+    if (!eventsByTitle[title]) {
+      eventsByTitle[title] = 0;
+    }
+    eventsByTitle[title]++;
+  });
+  
+  // Log breakdown
+  Object.keys(eventsByTitle).forEach(title => {
+    console.log(`  - ${title}: ${eventsByTitle[title]} events`);
+  });
   
   if (eventCount === 0) {
     throw new Error("No valid events could be generated from your schedule.");
@@ -564,6 +583,9 @@ function processSection(course, schedule, location, dates, addAlerts, respectHol
     const courseStartDate = new Date(dates.startDate);
     const courseEndDate = new Date(dates.endDate);
     
+    console.log(`Processing section for ${course.name} from ${courseStartDate.toDateString()} to ${courseEndDate.toDateString()}`);
+    console.log(`This course meets on days: ${JSON.stringify(schedule.days)}`);
+    
     // Parse the time strings
     // Match patterns like "9:30 AM" or "2:45 PM"
     const startTimeRegex = /(\d+):(\d+)\s+(AM|PM)/i;
@@ -629,111 +651,223 @@ function processSection(course, schedule, location, dates, addAlerts, respectHol
       }
     }
     
-    console.log(`Processing ${sectionType} section for ${course.name}`);
+    console.log(`Section type determined as: ${sectionType} for ${course.name}`);
     
     // Create the formatted event title with section type
     const eventTitle = `${sectionType}: ${course.name}`;
     
+    // Count events created for debugging
+    let eventsCreatedForCourse = 0;
+    
     // For each day of the week this class occurs
     schedule.days.forEach(dayOfWeek => {
+      console.log(`Processing day ${dayOfWeek} for ${course.name}`);
+      
       // Get the numeric day of week (0 = Sunday, 1 = Monday, etc.)
       const dayNumber = getDayNumber(dayOfWeek);
       
-      // Find the first occurrence of this day of week on or after the course start date
-      const firstOccurrence = findFirstDayOccurrence(courseStartDate, dayNumber);
+      // If we're not respecting holidays, create a single recurring event
+      if (!respectHolidays || !academicCalendar || !academicCalendar.holidays) {
+        console.log(`Not respecting holidays for ${course.name} on ${dayOfWeek}`);
+        
+        addRecurringEvent(
+          cal, eventTitle, course.instructor, location || 'No location specified',
+          courseStartDate, courseEndDate, dayNumber, dayOfWeek,
+          startHour, startMinute, endHour, endMinute, addAlerts
+        );
+        
+        eventsCreatedForCourse++;
+      }
       
-      // Calculate dates to exclude (holidays)
-      const excludeDates = [];
-      
-      if (respectHolidays && academicCalendar && academicCalendar.holidays) {
-        academicCalendar.holidays.forEach(holiday => {
-          let holidayDates = getHolidayDates(holiday);
-          if (holidayDates.length === 0) return;
+      // Sort holidays by start date
+      const sortedHolidays = [...academicCalendar.holidays]
+        .filter(holiday => {
+          // Convert dates for comparison
+          const holidayStartDate = holiday.date ? new Date(holiday.date) : new Date(holiday.startDate);
+          const holidayEndDate = holiday.date ? new Date(holiday.date) : new Date(holiday.endDate);
           
-          // Add any holiday date that falls on this day of the week and is within the course dates
-          for (const holidayDate of holidayDates) {
-            if (holidayDate.getDay() === dayNumber && 
-                holidayDate >= courseStartDate && 
-                holidayDate <= courseEndDate) {
-              console.log(`Excluding holiday date ${holidayDate.toDateString()} for ${course.name}`);
-              excludeDates.push(new Date(holidayDate));
-            }
+          // Debug logs
+          console.log(`Checking if holiday affects course: ${holiday.name}`);
+          console.log(`  Holiday: ${holidayStartDate.toDateString()} - ${holidayEndDate.toDateString()}`);
+          console.log(`  Course: ${courseStartDate.toDateString()} - ${courseEndDate.toDateString()}`);
+          
+          // Only include holidays that might affect this course
+          const affects = (
+            holidayEndDate >= courseStartDate && holidayStartDate <= courseEndDate
+          );
+          console.log(`  Affects course: ${affects}`);
+          return affects;
+        })
+        .map(holiday => {
+          if (holiday.date) {
+            return {
+              name: holiday.name,
+              start: new Date(holiday.date),
+              end: new Date(holiday.date)
+            };
+          } else {
+            return {
+              name: holiday.name,
+              start: new Date(holiday.startDate),
+              end: new Date(holiday.endDate)
+            };
           }
-        });
+        })
+        .sort((a, b) => a.start.getTime() - b.start.getTime());
+        
+      console.log(`Found ${sortedHolidays.length} potential holidays for ${course.name} on ${dayOfWeek}:`);
+      sortedHolidays.forEach(h => console.log(`  - ${h.name}: ${h.start.toDateString()} to ${h.end.toDateString()}`));
+      
+      // Identify break points for this day of the week
+      const breakPoints = [];
+      
+      for (const holiday of sortedHolidays) {
+        // For single-day holidays, only break if they fall on this day of week
+        if (holiday.start.getTime() === holiday.end.getTime()) {
+          if (holiday.start.getDay() === dayNumber) {
+            breakPoints.push({
+              name: holiday.name,
+              lastDayBefore: new Date(holiday.start.getTime() - 86400000), // Day before holiday
+              firstDayAfter: new Date(holiday.end.getTime() + 86400000) // Day after holiday
+            });
+          }
+          continue;
+        }
+        
+        // For multi-day holidays, check if they include this day of week
+        let affectsThisDay = false;
+        const tempDate = new Date(holiday.start);
+        
+        // Check each day in the holiday period
+        while (tempDate <= holiday.end) {
+          if (tempDate.getDay() === dayNumber) {
+            affectsThisDay = true;
+            break;
+          }
+          tempDate.setDate(tempDate.getDate() + 1);
+        }
+        
+        if (affectsThisDay) {
+          breakPoints.push({
+            name: holiday.name,
+            lastDayBefore: new Date(holiday.start.getTime() - 86400000), // Day before holiday starts
+            firstDayAfter: new Date(holiday.end.getTime() + 86400000) // Day after holiday ends
+          });
+        }
       }
       
-      // Set the start and end times for the event
-      const start = new Date(firstOccurrence);
-      start.setHours(startHour, startMinute, 0);
+      console.log(`Found ${breakPoints.length} break points for ${course.name} on day ${dayOfWeek}:`);
+      breakPoints.forEach(bp => console.log(`  - ${bp.name}: Last day before: ${bp.lastDayBefore.toDateString()}, First day after: ${bp.firstDayAfter.toDateString()}`));
       
-      const end = new Date(firstOccurrence);
-      end.setHours(endHour, endMinute, 0);
-      
-      // Create event options with recurrence rule
-      const eventOptions = {
-        recurrenceRule: {
-          freq: 'WEEKLY',
-          until: courseEndDate,
-          byday: [dayOfWeek]
-        },
-        alarms: addAlerts ? [{action: 'display', trigger: {minutes: 15, before: true}}] : null
-      };
-      
-      // Add excluded dates if any
-      if (excludeDates.length > 0) {
-        eventOptions.excludeDates = excludeDates;
+      if (breakPoints.length === 0) {
+        // No breaks affect this class, create a single recurring event
+        console.log(`No breaks affect ${course.name} on ${dayOfWeek}, creating single recurring event`);
+        
+        addRecurringEvent(
+          cal, eventTitle, course.instructor, location || 'No location specified',
+          courseStartDate, courseEndDate, dayNumber, dayOfWeek,
+          startHour, startMinute, endHour, endMinute, addAlerts
+        );
+        
+        eventsCreatedForCourse++;
+      } else {
+        // Create separate events for each segment
+        let currentStartDate = new Date(courseStartDate);
+        
+        // For each break, create an event that ends right before the break
+        for (const breakPoint of breakPoints) {
+          // Skip if this break is entirely before our current position
+          if (breakPoint.lastDayBefore < currentStartDate) {
+            console.log(`Skipping ${breakPoint.name} as it's before our current start date ${currentStartDate.toDateString()}`);
+            continue;
+          }
+          
+          // Create event from current start to day before break
+          console.log(`Creating event from ${currentStartDate.toDateString()} to ${breakPoint.lastDayBefore.toDateString()} (before ${breakPoint.name})`);
+          
+          addRecurringEvent(
+            cal, eventTitle, course.instructor, location || 'No location specified',
+            currentStartDate, breakPoint.lastDayBefore, dayNumber, dayOfWeek,
+            startHour, startMinute, endHour, endMinute, addAlerts
+          );
+          
+          eventsCreatedForCourse++;
+          
+          // Move current start to day after break
+          currentStartDate = new Date(breakPoint.firstDayAfter);
+          console.log(`Setting new start date to ${currentStartDate.toDateString()} (after ${breakPoint.name})`);
+        }
+        
+        // Create final event from last break to end of semester
+        if (currentStartDate <= courseEndDate) {
+          console.log(`Creating final event from ${currentStartDate.toDateString()} to ${courseEndDate.toDateString()}`);
+          
+          addRecurringEvent(
+            cal, eventTitle, course.instructor, location || 'No location specified',
+            currentStartDate, courseEndDate, dayNumber, dayOfWeek,
+            startHour, startMinute, endHour, endMinute, addAlerts
+          );
+          
+          eventsCreatedForCourse++;
+        } else {
+          console.log(`No final event needed as last break extends beyond course end date`);
+        }
       }
-      
-      // Add the event to the calendar
-      cal.addEvent(
-        eventTitle,
-        course.instructor ? `Instructor: ${course.instructor}` : '',
-        location || 'No location specified',
-        start,
-        end,
-        eventOptions
-      );
-      
-      console.log(`Added recurring event for ${course.name} on ${dayOfWeek} with ${excludeDates.length} excluded dates`);
     });
+    
+    console.log(`Created ${eventsCreatedForCourse} events for ${course.name}`);
   } catch (error) {
     console.error(`Error processing section for course ${course.name}:`, error);
   }
 }
 
-// Helper function to get all dates within a holiday period
-function getHolidayDates(holiday) {
-  const dates = [];
-  
+// Helper function to add a recurring event
+function addRecurringEvent(
+  cal, title, instructor, location, 
+  rangeStart, rangeEnd, dayNumber, dayOfWeek,
+  startHour, startMinute, endHour, endMinute, addAlerts
+) {
   try {
-    if (holiday.date) {
-      // Single day holiday
-      const holidayDate = new Date(holiday.date);
-      if (!isNaN(holidayDate.getTime())) {
-        dates.push(holidayDate);
-      }
-    } else if (holiday.startDate && holiday.endDate) {
-      // Date range holiday (like Spring Break)
-      const startDate = new Date(holiday.startDate);
-      const endDate = new Date(holiday.endDate);
-      
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        console.warn(`Invalid date format for holiday: ${holiday.name}`);
-        return dates;
-      }
-      
-      // Add each date in the range
-      const currentDate = new Date(startDate);
-      while (currentDate <= endDate) {
-        dates.push(new Date(currentDate));
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
+    // Find first occurrence of this day of week after rangeStart
+    const firstDate = findFirstDayOccurrence(rangeStart, dayNumber);
+    
+    // If first occurrence is after rangeEnd, no event to create
+    if (firstDate > rangeEnd) {
+      console.log(`No occurrences of ${dayOfWeek} between ${rangeStart.toDateString()} and ${rangeEnd.toDateString()}`);
+      return;
     }
+    
+    // Set event times
+    const eventStart = new Date(firstDate);
+    eventStart.setHours(startHour, startMinute, 0);
+    
+    const eventEnd = new Date(firstDate);
+    eventEnd.setHours(endHour, endMinute, 0);
+    
+    // Create event options
+    const eventOptions = {
+      recurrenceRule: {
+        freq: 'WEEKLY',
+        until: rangeEnd,
+        byday: [dayOfWeek]
+      },
+      alarms: addAlerts ? [{action: 'display', trigger: {minutes: 15, before: true}}] : null
+    };
+    
+    // Add event to calendar
+    cal.addEvent(
+      title,
+      instructor ? `Instructor: ${instructor}` : '',
+      location,
+      eventStart,
+      eventEnd,
+      eventOptions
+    );
+    
+    console.log(`Added recurring event: ${title} on ${dayOfWeek} from ${eventStart.toLocaleString()} starting on ${firstDate.toDateString()} until ${rangeEnd.toDateString()}`);
   } catch (error) {
-    console.error(`Error processing holiday dates: ${error}`);
+    console.error("Error adding recurring event:", error);
   }
-  
-  return dates;
 }
 
 // Reset the application state
@@ -782,11 +916,31 @@ function getDayNumber(icalDay) {
 
 // Find the first occurrence of a day of the week on or after a given date
 function findFirstDayOccurrence(startDate, dayNumber) {
+  console.log(`Finding first ${getDayName(dayNumber)} on or after ${startDate.toDateString()}`);
+  
   const result = new Date(startDate);
-  while (result.getDay() !== dayNumber) {
-    result.setDate(result.getDate() + 1);
+  
+  // If the start date is already the right day, use it
+  if (result.getDay() === dayNumber) {
+    console.log(`Start date ${result.toDateString()} is already a ${getDayName(dayNumber)}`);
+    return result;
   }
+  
+  // Otherwise search forward until we find the day
+  let daysChecked = 0;
+  while (result.getDay() !== dayNumber && daysChecked < 7) {
+    result.setDate(result.getDate() + 1);
+    daysChecked++;
+  }
+  
+  console.log(`First ${getDayName(dayNumber)} found: ${result.toDateString()}`);
   return result;
+}
+
+// Helper to get day name from number
+function getDayName(dayNumber) {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[dayNumber] || 'Unknown';
 }
 
 // Show an error message
@@ -954,14 +1108,27 @@ function getAcademicCalendar() {
   if (academicCalendar) {
     console.log("Using fetched academic calendar data");
     
+    // Log all holidays in the fetched calendar
+    console.log("Fetched academic calendar holidays:");
+    if (academicCalendar.holidays) {
+      academicCalendar.holidays.forEach(holiday => {
+        if (holiday.date) {
+          console.log(`  - ${holiday.name}: ${holiday.date}`);
+        } else {
+          console.log(`  - ${holiday.name}: ${holiday.startDate} - ${holiday.endDate}`);
+        }
+      });
+    }
+    
     // Ensure Spring Break dates are correct
     if (academicCalendar.holidays) {
       for (let i = 0; i < academicCalendar.holidays.length; i++) {
         const holiday = academicCalendar.holidays[i];
         if (holiday.name === "Spring Break" || holiday.name === "Spring Recess") {
           console.log(`Found Spring Break: ${holiday.startDate} - ${holiday.endDate}`);
-          academicCalendar.holidays[i].startDate = "2024-03-23";
-          academicCalendar.holidays[i].endDate = "2024-03-29";
+          // Update to match the year in the course data (2025)
+          academicCalendar.holidays[i].startDate = "2025-03-23";
+          academicCalendar.holidays[i].endDate = "2025-03-29";
           console.log(`Updated to: ${academicCalendar.holidays[i].startDate} - ${academicCalendar.holidays[i].endDate}`);
         }
       }
@@ -972,9 +1139,8 @@ function getAcademicCalendar() {
   
   console.log("Using default academic calendar data");
   
-  // Otherwise, return a default academic calendar with basic semester data
-  // Note: Using ISO format YYYY-MM-DD for all dates for consistency
-  return {
+  // Create the default calendar
+  const defaultCalendar = {
     semester: {
       fall: {
         start: "2023-09-06",
@@ -997,8 +1163,8 @@ function getAcademicCalendar() {
       },
       {
         name: "Spring Break",
-        startDate: "2024-03-23",
-        endDate: "2024-03-29"
+        startDate: "2025-03-23",
+        endDate: "2025-03-29"
       },
       {
         name: "Martin Luther King Jr. Day",
@@ -1010,4 +1176,16 @@ function getAcademicCalendar() {
       spring: "2024-03-10"
     }
   };
+  
+  // Log all default holidays
+  console.log("Default academic calendar holidays:");
+  defaultCalendar.holidays.forEach(holiday => {
+    if (holiday.date) {
+      console.log(`  - ${holiday.name}: ${holiday.date}`);
+    } else {
+      console.log(`  - ${holiday.name}: ${holiday.startDate} - ${holiday.endDate}`);
+    }
+  });
+  
+  return defaultCalendar;
 } 
