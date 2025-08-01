@@ -1120,60 +1120,46 @@ function getAcademicCalendar() {
       });
     }
     
-    // Ensure Spring Break dates are correct
-    if (academicCalendar.holidays) {
-      for (let i = 0; i < academicCalendar.holidays.length; i++) {
-        const holiday = academicCalendar.holidays[i];
-        if (holiday.name === "Spring Break" || holiday.name === "Spring Recess") {
-          console.log(`Found Spring Break: ${holiday.startDate} - ${holiday.endDate}`);
-          // Update to match the year in the course data (2025)
-          academicCalendar.holidays[i].startDate = "2025-03-23";
-          academicCalendar.holidays[i].endDate = "2025-03-29";
-          console.log(`Updated to: ${academicCalendar.holidays[i].startDate} - ${academicCalendar.holidays[i].endDate}`);
-        }
-      }
-    }
-    
     return academicCalendar;
   }
   
   console.log("Using default academic calendar data");
   
-  // Create the default calendar
+  // Create the default calendar with the provided dates
   const defaultCalendar = {
     semester: {
       fall: {
-        start: "2023-09-06",
-        end: "2023-12-13"
+        start: "2025-09-03",
+        end: "2025-12-19"
       },
       spring: {
-        start: "2024-01-23",
-        end: "2024-05-03"
+        start: "2026-01-20",
+        end: "2026-05-01"
       }
     },
     holidays: [
       {
         name: "Labor Day",
-        date: "2023-09-04"
+        date: "2025-09-01"
       },
       {
         name: "Thanksgiving",
-        startDate: "2023-11-23",
-        endDate: "2023-11-26"
+        startDate: "2025-11-27",
+        endDate: "2025-11-30"
       },
       {
         name: "Spring Break",
-        startDate: "2025-03-23",
-        endDate: "2025-03-29"
+        startDate: "2025-03-28",
+        endDate: "2025-04-05"
       },
       {
         name: "Martin Luther King Jr. Day",
-        date: "2024-01-15"
+        date: "2026-01-19"
       }
     ],
     dstChanges: {
-      fall: "2023-11-05",
-      spring: "2024-03-10"
+      fall: "2025-11-02",
+      spring: "2026-03-09"
     }
   };
   

@@ -144,6 +144,10 @@ function parseJSONData(jsonData) {
         // Make sure we pass this through our enhanced conversion function
         const dayInitials = meeting.dayInitials || "";
         
+        // Debug: Log the term name being used
+        const termName = jsonData.terms?.present?.name;
+        console.log(`Term name from JSON: "${termName}"`);
+        
         courseInfo[courseId].sections.push({
           type: classItem.type,
           number: classItem.sectionNumber,
@@ -153,7 +157,7 @@ function parseJSONData(jsonData) {
             endTime: formatTime(meeting.end)
           },
           location: meeting.location || "Location not specified",
-          dates: getSemesterDates(jsonData.terms?.present?.name)
+          dates: getSemesterDates(termName)
         });
       }
       
@@ -231,16 +235,11 @@ function formatExamDate(dateStr) {
 }
 
 function getSemesterDates(termName) {
-  // Current academic year dates from UW-Madison calendar
-  // Source: https://secfac.wisc.edu/academic-calendar/
+  // Use the correct academic year dates for 2025-2026
+  // Fall 2025: September 3 - December 19, 2025
+  // Spring 2026: January 20 - May 1, 2026
   
-  // Get current year for accurate dates
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const nextYear = currentYear + 1;
-  
-  // After July, assume we're dealing with the fall semester of current year and spring of next year
-  const isAfterJuly = now.getMonth() >= 6; // 0-indexed, 6 = July
+  console.log(`getSemesterDates called with termName: "${termName}"`);
   
   // Format date strings with month numbers for consistency
   const formatDate = (month, day, year) => {
@@ -249,43 +248,46 @@ function getSemesterDates(termName) {
   
   // Use the appropriate academic year
   if (termName) {
+    console.log(`Processing term: "${termName}"`);
     if (termName.includes('Spring')) {
-      // Spring semester dates
+      console.log('Detected Spring semester');
+      // Spring semester dates for 2026
       return {
-        startDate: isAfterJuly 
-          ? formatDate(1, 21, nextYear)  // Jan 21, NEXT_YEAR
-          : formatDate(1, 21, currentYear),  // Jan 21, CURRENT_YEAR
-        endDate: isAfterJuly 
-          ? formatDate(5, 2, nextYear)  // May 2, NEXT_YEAR
-          : formatDate(5, 2, currentYear)  // May 2, CURRENT_YEAR
+        startDate: formatDate(1, 20, 2026),  // Jan 20, 2026
+        endDate: formatDate(5, 1, 2026)  // May 1, 2026
       };
     } else if (termName.includes('Fall')) {
-      // Fall semester dates
+      console.log('Detected Fall semester');
+      // Fall semester dates for 2025
       return {
-        startDate: formatDate(9, 4, currentYear),  // Sep 4, CURRENT_YEAR
-        endDate: formatDate(12, 11, currentYear)  // Dec 11, CURRENT_YEAR
+        startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
+        endDate: formatDate(12, 19, 2025)  // Dec 19, 2025
       };
     } else if (termName.includes('Summer')) {
-      // Summer semester dates
+      console.log('Detected Summer semester');
+      // Summer semester dates for 2026
       return {
-        startDate: isAfterJuly 
-          ? formatDate(5, 19, nextYear)  // May 19, NEXT_YEAR
-          : formatDate(5, 19, currentYear),  // May 19, CURRENT_YEAR
-        endDate: isAfterJuly 
-          ? formatDate(8, 8, nextYear)  // Aug 8, NEXT_YEAR
-          : formatDate(8, 8, currentYear)  // Aug 8, CURRENT_YEAR
+        startDate: formatDate(5, 19, 2026),  // May 19, 2026
+        endDate: formatDate(8, 8, 2026)  // Aug 8, 2026
       };
+    } else {
+      console.log(`Term "${termName}" not recognized, checking for other patterns...`);
+      // Try to detect based on other patterns
+      if (termName.toLowerCase().includes('fall') || termName.toLowerCase().includes('autumn')) {
+        console.log('Detected Fall semester via alternative pattern');
+        return {
+          startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
+          endDate: formatDate(12, 19, 2025)  // Dec 19, 2025
+        };
+      }
     }
   }
   
-  // Default to Spring semester if term name is not recognized
+  console.log('No term name provided or not recognized, defaulting to Fall 2025');
+  // Default to Fall 2025 semester if term name is not recognized
   return {
-    startDate: isAfterJuly 
-      ? formatDate(1, 21, nextYear)  // Jan 21, NEXT_YEAR
-      : formatDate(1, 21, currentYear),  // Jan 21, CURRENT_YEAR
-    endDate: isAfterJuly 
-      ? formatDate(5, 2, nextYear)  // May 2, NEXT_YEAR
-      : formatDate(5, 2, currentYear)  // May 2, CURRENT_YEAR
+    startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
+    endDate: formatDate(12, 19, 2025)  // Dec 19, 2025
   };
 }
 
