@@ -35,7 +35,8 @@ function extractCourseData() {
     const courses = [];
     
     // First try the specialized approach for the common format we're seeing
-    const courseElements = document.querySelectorAll('div, section, article').filter(el => {
+    // querySelectorAll returns a NodeList, convert to an array before using array methods
+    const courseElements = Array.from(document.querySelectorAll('div, section, article')).filter(el => {
       // Look for headings or elements that likely contain course names
       const heading = el.querySelector('h1, h2, h3, h4, h5, strong');
       if (!heading) return false;
