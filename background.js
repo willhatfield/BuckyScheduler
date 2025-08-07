@@ -44,49 +44,47 @@ async function fetchAcademicCalendar() {
     const academicYearStart = isAfterJuly ? currentYear : currentYear - 1;
     const academicYearEnd = academicYearStart + 1;
     
-    // Academic calendar data for 2024-2025
+    // Academic calendar data for 2025-2026
     // Source: https://secfac.wisc.edu/academic-calendar/
     const calendar = {
       semester: {
         fall: {
-          start: "2024-09-04", // Fall semester instruction begins
-          end: "2024-12-11"    // Last class day
+          start: "2025-09-03", // Fall semester instruction begins
+          end: "2025-12-10"    // Last class day
         },
         spring: {
-          start: "2025-01-21", // Spring semester instruction begins
-          end: "2025-05-02"    // Last class day
+          start: "2026-01-20", // Spring semester instruction begins
+          end: "2026-05-01"    // Last class day
         }
       },
       holidays: [
-        { name: "Labor Day", date: "2024-09-02" },
-        { name: "Thanksgiving Recess", startDate: "2024-11-28", endDate: "2024-12-01" },
-        { name: "Martin Luther King Jr. Day", date: "2025-01-20" },
-        { name: "Spring Recess", startDate: "2025-03-22", endDate: "2025-03-30" }
+        { name: "Labor Day", date: "2025-09-01" },
+        { name: "Thanksgiving Recess", startDate: "2025-11-27", endDate: "2025-11-30" },
+        { name: "Martin Luther King Jr. Day", date: "2026-01-19" },
+        { name: "Spring Recess", startDate: "2026-03-21", endDate: "2026-03-29" }
       ],
       finals: {
         fall: {
-          start: "2024-12-13",
-          end: "2024-12-19"
+          start: "2025-12-12",
+          end: "2025-12-18"
         },
         spring: {
-          start: "2025-05-04",
-          end: "2025-05-09"
+          start: "2026-05-03",
+          end: "2026-05-08"
         }
       },
       commencement: {
-        fall: "2024-12-15",
+        fall: "2025-12-14",
         spring: {
-          doctoral: "2025-05-09",
-          other: "2025-05-10"
+          doctoral: "2026-05-08",
+          other: "2026-05-09"
         }
       },
-      // Religious observances are also available on the calendar page
-      // These could be added for a more comprehensive calendar
-      
-      // When Daylight Saving Time changes occur (2024-2025)
+
+      // When Daylight Saving Time changes occur (2025-2026)
       dstChanges: {
-        spring: "2025-03-09", // Spring forward (2nd Sunday in March)
-        fall: "2024-11-03"    // Fall back (1st Sunday in November)
+        spring: "2026-03-08", // Spring forward (2nd Sunday in March)
+        fall: "2025-11-02"    // Fall back (1st Sunday in November)
       }
     };
     

@@ -518,73 +518,37 @@ function extractStructuredCourseData(courseElement) {
   }
 }
 
-// Convert days string like "MWF" to ICAL format ["MO", "WE", "FR"]
+// Convert a schedule days string to iCal format (e.g., "TuTh" -> ["TU","TH"])
 function convertDaysToICalFormat(daysStr) {
-  const days = [];
-  
-  // Make sure it's a string and uppercase, remove any non-alphabetic characters
-  const dayStr = String(daysStr || "").toUpperCase().replace(/[^A-Z]/g, '');
-  
-  // Handle empty input
-  if (!dayStr || dayStr.length === 0) {
-    return days;
-  }
-  
-  // UW-Madison day format:
-  // M = Monday
-  // T = Tuesday
-  // W = Wednesday
-  // R = Thursday (this is unique to UW-Madison - most calendars use 'Th')
-  // F = Friday
-  
-  // Extract unique characters from dayStr for better pattern matching
-  const uniqueChars = [...new Set(dayStr.split(''))].join('');
-  
-  // Check for individual days
-  if (uniqueChars.includes('M')) days.push('MO');
-  
-  // Special handling for T (Tuesday) vs TH (Thursday)
-  if (uniqueChars.includes('T')) {
-    // Check if it's part of "TH" sequence
-    let isTuesday = true;
-    
-    for (let i = 0; i < dayStr.length; i++) {
-      if (dayStr[i] === 'T' && i + 1 < dayStr.length && dayStr[i + 1] === 'H') {
-        // This T is part of TH, so it's not a standalone T for Tuesday
-        isTuesday = false;
-        break;
-      }
+  const map = {
+    M: 'MO', Mo: 'MO', Mon: 'MO',
+    T: 'TU', Tu: 'TU', Tue: 'TU',
+    W: 'WE', We: 'WE', Wed: 'WE',
+    R: 'TH', Th: 'TH', Thu: 'TH',
+    F: 'FR', Fr: 'FR', Fri: 'FR',
+    S: 'SA', Sa: 'SA', Sat: 'SA',
+    U: 'SU', Su: 'SU', Sun: 'SU'
+  };
+
+  const tokens = String(daysStr || '')
+    .replace(/[^a-zA-Z]/g, '')
+    .match(/(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Mo|Tu|We|Th|Fr|Sa|Su|M|T|W|R|F|S|U)/gi);
+
+  if (!tokens) return [];
+
+  const result = [];
+  tokens.forEach(token => {
+    const key = token.length > 1
+      ? token[0].toUpperCase() + token.slice(1).toLowerCase()
+      : token.toUpperCase();
+    const dayCode = map[key];
+    if (dayCode && !result.includes(dayCode)) {
+      result.push(dayCode);
     }
-    
-    // If T is not part of TH, it represents Tuesday
-    if (isTuesday) {
-      days.push('TU');
-    }
-  }
-  
-  if (uniqueChars.includes('W')) days.push('WE');
-  
-  // Handle R for Thursday (UW-Madison specific)
-  if (uniqueChars.includes('R')) days.push('TH');
-  
-  // Also handle TH for Thursday (standard format)
-  if (dayStr.includes('TH')) days.push('TH');
-  
-  if (uniqueChars.includes('F')) days.push('FR');
-  
-  // Handle weekend days
-  if (uniqueChars.includes('S') && !dayStr.includes('SU')) days.push('SA');
-  if (dayStr.includes('SU') || uniqueChars.includes('U')) days.push('SU');
-  
-  // Remove duplicate day codes (e.g., if both R and TH were detected)
-  const uniqueDays = [...new Set(days)];
-  
-  // Log day conversions for debugging - only when there's actually data
-  if (dayStr && dayStr.length > 0) {
-    console.debug(`Day conversion: "${daysStr}" → "${dayStr}" → ${JSON.stringify(uniqueDays)}`);
-  }
-  
-  return uniqueDays;
+  });
+
+  console.debug(`Day conversion: "${daysStr}" → ${JSON.stringify(result)}`);
+  return result;
 }
 
 // Original extraction methods as fallback
