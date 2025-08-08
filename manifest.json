@@ -19,7 +19,7 @@
   "content_scripts": [
     {
       "matches": ["https://mumaaenroll.services.wisc.edu/courses-schedule/*"],
-      "js": ["content.js"]
+      "js": ["courseDataExtractor.js", "content.js"]
     }
   ],
   "background": {
@@ -30,4 +30,4 @@
     "48": "images/icon48.png",
     "128": "images/icon128.png"
   }
-} 
+ }
