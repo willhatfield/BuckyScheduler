@@ -22,6 +22,12 @@
       "js": ["courseDataExtractor.js", "content.js"]
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["courseDataExtractor.js", "content.js"],
+      "matches": ["https://mumaaenroll.services.wisc.edu/*"]
+    }
+  ],
   "background": {
     "service_worker": "background.js"
   },
