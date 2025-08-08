@@ -434,11 +434,11 @@ async function extractSchedule() {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['content.js']
+        files: ['courseDataExtractor.js', 'content.js']
       });
-      console.log("Content script injected successfully");
+      console.log("Content scripts injected successfully");
     } catch (error) {
-      console.warn("Content script may already be loaded:", error);
+      console.warn("Content scripts may already be loaded:", error);
       // Continue anyway as the script might already be there
     }
     
