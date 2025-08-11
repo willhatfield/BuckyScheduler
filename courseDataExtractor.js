@@ -1,48 +1,25 @@
 // Parsing and extraction logic moved from content.js
-function extractCourseData() {
+function extractCourseData(selectedTerm = null) {
   try {
-    // First try to extract the JSON data from the page
+    console.log("Starting course data extraction...");
+    console.log(`Using selected term: ${selectedTerm}`);
+    
+    // Extract the JSON data from the page
     const jsonData = extractJSONDataFromPage();
     
-    if (jsonData) {
-      console.log("Found JSON course data in the page");
-      return parseJSONData(jsonData);
+    if (!jsonData) {
+      console.error("No JSON data found - extraction failed");
+      throw new Error("No course data found on the page. Please make sure you're on the correct UW-Madison course schedule page.");
     }
     
-    // If JSON extraction fails, try the DOM-based extraction methods
-    console.log("No JSON data found, falling back to DOM parsing");
-    const courses = [];
+    console.log("Found JSON course data in the page");
+    console.log("JSON data structure:", Object.keys(jsonData));
     
-    // First try the specialized approach for the common format we're seeing
-    const courseElements = Array.from(document.querySelectorAll('div, section, article')).filter(el => {
-      // Look for headings or elements that likely contain course names
-      const heading = el.querySelector('h1, h2, h3, h4, h5, strong');
-      if (!heading) return false;
-      
-      // Check if heading text matches course pattern (e.g., "CHEM 329: Fundamentals...")
-      const text = heading.textContent.trim();
-      return /[A-Z]+ \d+:/.test(text) || /[A-Z]+ [A-Z]+ \d+:/.test(text);
-    });
-    
-    // If we found structured course elements, extract from those
-    if (courseElements && courseElements.length > 0) {
-      courseElements.forEach(courseEl => {
-        const courseData = extractStructuredCourseData(courseEl);
-        if (courseData) courses.push(courseData);
-      });
-    } else {
-      // Otherwise, try to parse from text content in a more general way
-      const coursesText = document.body.textContent;
-      const parsedCourses = parseCoursesFromText(coursesText);
-      courses.push(...parsedCourses);
+    if (jsonData.terms) {
+      console.log("Terms data found:", jsonData.terms);
     }
     
-    // If still no courses found, try the older methods
-    if (courses.length === 0) {
-      return fallbackExtractCourseData();
-    }
-    
-    return courses;
+    return parseJSONData(jsonData, selectedTerm);
   } catch (error) {
     console.error("Error extracting course data:", error);
     throw new Error("Failed to extract course data. Error: " + error.message);
@@ -52,27 +29,71 @@ function extractCourseData() {
 // Extract JSON data from the page script tags
 function extractJSONDataFromPage() {
   try {
-    // Look for the script tag containing the course data
-    const scripts = document.querySelectorAll('script[type="module"]');
+    // Look for JSON data in various script tags
+    const scripts = document.querySelectorAll('script');
     let jsonData = null;
     
+    console.log("Searching for JSON data in", scripts.length, "script tags");
+    
     for (const script of scripts) {
-      if (!script.textContent.includes('loadTimeline')) continue;
+      const content = script.textContent || script.innerHTML;
       
-      // Extract the JSON data object
-      const match = script.textContent.match(/const data = (\{.*?\});/s);
-      if (match && match[1]) {
-        try {
-          // Parse the JSON data
-          jsonData = JSON.parse(match[1]);
-          break;
-        } catch (e) {
-          console.error("Failed to parse JSON data:", e);
+      // Try multiple patterns to find JSON data
+      const patterns = [
+        // Pattern 1: const data = {...};
+        /const\s+data\s*=\s*(\{.*?\});/s,
+        // Pattern 2: window.data = {...};
+        /window\.data\s*=\s*(\{.*?\});/s,
+        // Pattern 3: var data = {...};
+        /var\s+data\s*=\s*(\{.*?\});/s,
+        // Pattern 4: let data = {...};
+        /let\s+data\s*=\s*(\{.*?\});/s,
+        // Pattern 5: data = {...};
+        /data\s*=\s*(\{.*?\});/s,
+        // Pattern 6: Look for any object with courses property
+        /(\{[^}]*"courses"[^}]*\{[^}]*\})/s
+      ];
+      
+      for (const pattern of patterns) {
+        const match = content.match(pattern);
+        if (match && match[1]) {
+          try {
+            // Parse the JSON data
+            jsonData = JSON.parse(match[1]);
+            
+            // Verify it has the expected structure
+            if (jsonData && (jsonData.courses || jsonData.classes || jsonData.terms)) {
+              console.log("Found valid JSON data with course information");
+              console.log("JSON data keys:", Object.keys(jsonData));
+              if (jsonData.terms) {
+                console.log("Terms data:", jsonData.terms);
+              }
+              return jsonData;
+            }
+          } catch (e) {
+            console.error("Failed to parse JSON data with pattern:", pattern, e);
+            continue;
+          }
         }
       }
     }
     
-    return jsonData;
+    // If no JSON found in scripts, try to find it in the page's global variables
+    if (typeof window !== 'undefined') {
+      const globalVars = ['data', 'courseData', 'scheduleData', 'enrollmentData'];
+      for (const varName of globalVars) {
+        if (window[varName] && typeof window[varName] === 'object') {
+          const data = window[varName];
+          if (data.courses || data.classes || data.terms) {
+            console.log(`Found course data in global variable: ${varName}`);
+            return data;
+          }
+        }
+      }
+    }
+    
+    console.error("No valid JSON course data found on the page");
+    return null;
   } catch (error) {
     console.error("Error extracting JSON data:", error);
     return null;
@@ -80,18 +101,40 @@ function extractJSONDataFromPage() {
 }
 
 // Parse the extracted JSON data into course objects
-function parseJSONData(jsonData) {
+function parseJSONData(jsonData, selectedTerm) {
   const courses = [];
+  
+  console.log("Parsing JSON data:", jsonData);
+  
+  // Debug: Check for term information in JSON
+  console.log("Checking for term information in JSON data...");
+  if (jsonData.terms) {
+    console.log("jsonData.terms:", jsonData.terms);
+  }
+  if (jsonData.currentTerm) {
+    console.log("jsonData.currentTerm:", jsonData.currentTerm);
+  }
+  if (jsonData.term) {
+    console.log("jsonData.term:", jsonData.term);
+  }
   
   // First gather all course information
   const courseInfo = {};
   
-  // Extract course details
-  if (jsonData.courses) {
-    jsonData.courses.forEach(course => {
-      courseInfo[course.id] = {
-        courseId: course.id,
-        name: `${course.subjectShortDesc} ${course.catalogNumber}: ${course.title}`,
+  // Extract course details - handle different possible structures
+  const coursesData = jsonData.courses || jsonData.courseData || jsonData.enrolledCourses || [];
+  
+  if (coursesData && coursesData.length > 0) {
+    coursesData.forEach(course => {
+      const subject = course.subjectShortDesc || course.subjectCode || course.subject || '';
+      const catalog = course.catalogNumber || course.number || '';
+      const title = course.title || course.courseTitle || '';
+      const fullName = `${subject ? subject : ''}${subject && catalog ? ' ' : ''}${catalog ? catalog : ''}${(subject || catalog) && title ? ': ' : ''}${title}`.trim();
+
+      const courseId = course.id || course.courseId || (subject + catalog);
+      courseInfo[courseId] = {
+        courseId: courseId,
+        name: fullName || title || courseId,
         sections: [],
         finalExam: null
       };
@@ -99,44 +142,61 @@ function parseJSONData(jsonData) {
       // Add exams if available
       if (course.exams && course.exams.length > 0) {
         const exam = course.exams[0];
-        courseInfo[course.id].finalExam = {
-          date: formatExamDate(exam.start),
-          time: `${formatTime(exam.start)} - ${formatTime(exam.end)}`,
+        courseInfo[courseId].finalExam = {
+          date: formatExamDate(exam.start || exam.date),
+          time: `${formatTime(exam.start || exam.date)} - ${formatTime(exam.end || exam.endTime)}`,
           location: exam.location || "Location not specified"
         };
       }
     });
   }
   
-  // Extract class/section details
-  if (jsonData.classes && jsonData.courseForClassId) {
-    jsonData.classes.forEach(classItem => {
-      const courseId = jsonData.courseForClassId[classItem.id]?.id;
+  // Extract class/section details - handle different possible structures
+  const classesData = jsonData.classes || jsonData.sections || jsonData.enrolledSections || [];
+  
+  if (classesData && classesData.length > 0) {
+    classesData.forEach(classItem => {
+      // Try different ways to find the course ID
+      let courseId = null;
+      if (jsonData.courseForClassId && jsonData.courseForClassId[classItem.id]) {
+        courseId = jsonData.courseForClassId[classItem.id].id;
+      } else if (classItem.courseId) {
+        courseId = classItem.courseId;
+      } else if (classItem.subjectCode && classItem.catalogNumber) {
+        courseId = classItem.subjectCode + classItem.catalogNumber;
+      }
       
-      if (!courseId || !courseInfo[courseId]) return;
+      if (!courseId || !courseInfo[courseId]) {
+        console.warn(`Could not find course info for class: ${classItem.id}`);
+        return;
+      }
       
       // Extract meeting information
-      if (classItem.meetings && classItem.meetings.length > 0) {
-        const meeting = classItem.meetings[0];
+      const meetings = classItem.meetings || classItem.schedule || [];
+      if (meetings && meetings.length > 0) {
+        const meeting = meetings[0];
         
         // Convert day initials - ensuring UW-Madison format is properly handled (R = Thursday, T = Tuesday)
-        // Make sure we pass this through our enhanced conversion function
-        const dayInitials = meeting.dayInitials || "";
+        const dayInitials = meeting.dayInitials || meeting.days || "";
         
-        // Debug: Log the term name being used
-        const termName = jsonData.terms?.present?.name;
-        console.log(`Term name from JSON: "${termName}"`);
+        // Get term name from selected term or JSON data
+        const termName = selectedTerm || jsonData.terms?.present?.name || jsonData.currentTerm?.name || jsonData.term?.name;
+        console.log(`Term name being used: "${termName}"`);
+        
+        const semesterDates = getSemesterDates(termName);
+        console.log(`Semester dates for ${courseInfo[courseId].name}:`, semesterDates);
+        console.log(`Course: ${courseInfo[courseId].name}, Term: "${termName}", Dates: ${semesterDates.startDate} - ${semesterDates.endDate}`);
         
         courseInfo[courseId].sections.push({
-          type: classItem.type,
-          number: classItem.sectionNumber,
+          type: classItem.type || classItem.sectionType || "LEC",
+          number: classItem.sectionNumber || classItem.number || "001",
           schedule: {
             days: convertDaysToICalFormat(dayInitials),
-            startTime: formatTime(meeting.start),
-            endTime: formatTime(meeting.end)
+            startTime: formatTime(meeting.start || meeting.startTime),
+            endTime: formatTime(meeting.end || meeting.endTime)
           },
-          location: meeting.location || "Location not specified",
-          dates: getSemesterDates(termName)
+          location: meeting.location || classItem.location || "Location not specified",
+          dates: semesterDates
         });
       }
       
@@ -144,8 +204,8 @@ function parseJSONData(jsonData) {
       if (classItem.exams && classItem.exams.length > 0 && !courseInfo[courseId].finalExam) {
         const exam = classItem.exams[0];
         courseInfo[courseId].finalExam = {
-          date: formatExamDate(exam.start),
-          time: `${formatTime(exam.start)} - ${formatTime(exam.end)}`,
+          date: formatExamDate(exam.start || exam.date),
+          time: `${formatTime(exam.start || exam.date)} - ${formatTime(exam.end || exam.endTime)}`,
           location: exam.location || "Location not specified"
         };
       }
@@ -172,6 +232,7 @@ function parseJSONData(jsonData) {
     });
   }
   
+  console.log(`Parsed ${courses.length} courses from JSON data`);
   return courses;
 }
 
@@ -215,7 +276,7 @@ function formatExamDate(dateStr) {
 
 function getSemesterDates(termName) {
   // Use the correct academic year dates for 2025-2026
-  // Fall 2025: September 3 - December 19, 2025
+  // Fall 2025: September 3 - December 10, 2025 (last class day)
   // Spring 2026: January 20 - May 1, 2026
   
   console.log(`getSemesterDates called with termName: "${termName}"`);
@@ -225,24 +286,57 @@ function getSemesterDates(termName) {
     return `${monthNumberToName(month)} ${day}, ${year}`;
   };
   
+  // If no term name provided, try to detect it from the page
+  if (!termName) {
+    // Look for term information in the page
+    const termSelectors = [
+      'select[name*="term"] option[selected]',
+      '.term-selector option[selected]',
+      '[data-term]',
+      '.current-term',
+      'h1, h2, h3, h4, h5, h6'
+    ];
+    
+    console.log("No term name provided, searching page for term information...");
+    
+    for (const selector of termSelectors) {
+      const elements = document.querySelectorAll(selector);
+      console.log(`Searching selector "${selector}": found ${elements.length} elements`);
+      
+      for (const element of elements) {
+        const text = element.textContent || element.value || '';
+        console.log(`Element text: "${text}"`);
+        
+        if (text.includes('Fall') || text.includes('Spring') || text.includes('Summer')) {
+          termName = text;
+          console.log(`Detected term from page: "${termName}"`);
+          break;
+        }
+      }
+      if (termName) break;
+    }
+  }
+  
   // Use the appropriate academic year
   if (termName) {
     console.log(`Processing term: "${termName}"`);
-    if (termName.includes('Spring')) {
+    
+    // Handle new term format (fall2025, spring2026, summer2026)
+    if (termName === 'fall2025' || termName.includes('Fall')) {
+      console.log('Detected Fall semester');
+      // Fall semester dates for 2025 (classes end Dec 10)
+      return {
+        startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
+        endDate: formatDate(12, 10, 2025)  // Dec 10, 2025
+      };
+    } else if (termName === 'spring2026' || termName.includes('Spring')) {
       console.log('Detected Spring semester');
       // Spring semester dates for 2026
       return {
         startDate: formatDate(1, 20, 2026),  // Jan 20, 2026
         endDate: formatDate(5, 1, 2026)  // May 1, 2026
       };
-    } else if (termName.includes('Fall')) {
-      console.log('Detected Fall semester');
-      // Fall semester dates for 2025
-      return {
-        startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
-        endDate: formatDate(12, 19, 2025)  // Dec 19, 2025
-      };
-    } else if (termName.includes('Summer')) {
+    } else if (termName === 'summer2026' || termName.includes('Summer')) {
       console.log('Detected Summer semester');
       // Summer semester dates for 2026
       return {
@@ -256,17 +350,17 @@ function getSemesterDates(termName) {
         console.log('Detected Fall semester via alternative pattern');
         return {
           startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
-          endDate: formatDate(12, 19, 2025)  // Dec 19, 2025
+          endDate: formatDate(12, 10, 2025)  // Dec 10, 2025
         };
       }
     }
   }
   
   console.log('No term name provided or not recognized, defaulting to Fall 2025');
-  // Default to Fall 2025 semester if term name is not recognized
+  // Default to Fall 2025 semester if term name is not recognized (classes end Dec 10)
   return {
     startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
-    endDate: formatDate(12, 19, 2025)  // Dec 19, 2025
+    endDate: formatDate(12, 10, 2025)  // Dec 10, 2025
   };
 }
 
@@ -274,227 +368,6 @@ function getSemesterDates(termName) {
 function monthNumberToName(monthNumber) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return months[monthNumber - 1] || 'Jan'; // Subtract 1 because months array is 0-indexed but our input is 1-indexed
-}
-
-// Parse courses from text content when structured elements are not easily identifiable
-function parseCoursesFromText(text) {
-  const courses = [];
-  
-  // Split text into lines and look for course sections
-  const lines = text.split('\n').map(line => line.trim()).filter(line => line);
-  
-  let currentCourse = null;
-  let inWeeklyMeetings = false;
-  let inExams = false;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    
-    // Look for course header (e.g., "CHEM 329: Fundamentals of Analytical Science")
-    const courseMatch = line.match(/([A-Z]+ \d+):\s*(.*)/);
-    if (courseMatch) {
-      // Save previous course if exists
-      if (currentCourse) {
-        courses.push(currentCourse);
-      }
-      
-      // Start new course
-      currentCourse = {
-        courseId: courseMatch[1],
-        name: `${courseMatch[1]}: ${courseMatch[2]}`,
-        sections: []
-      };
-      
-      inWeeklyMeetings = false;
-      inExams = false;
-      continue;
-    }
-    
-    if (!currentCourse) continue;
-    
-    // Check for section markers
-    if (line === "Weekly Meetings") {
-      inWeeklyMeetings = true;
-      inExams = false;
-      continue;
-    } else if (line === "Exams") {
-      inWeeklyMeetings = false;
-      inExams = true;
-      continue;
-    }
-    
-    // Parse weekly meeting information
-    if (inWeeklyMeetings) {
-      // Match patterns like "LEC 001 MW 8:50 AM - 9:40 AM Chemistry Building Room 1315"
-      const meetingMatch = line.match(/(LEC|DIS|LAB|SEM)\s+(\d+)\s+([MTWRFS]+)\s+(\d+:\d+\s+[AP]M)\s+-\s+(\d+:\d+\s+[AP]M)\s+(.*)/);
-      if (meetingMatch) {
-        const sectionType = meetingMatch[1];
-        const sectionNumber = meetingMatch[2];
-        const days = meetingMatch[3];
-        const startTime = meetingMatch[4];
-        const endTime = meetingMatch[5];
-        const location = meetingMatch[6] || "Location not specified";
-        
-        // Add the section to the course
-        currentCourse.sections.push({
-          type: sectionType,
-          number: sectionNumber,
-          schedule: {
-            days: convertDaysToICalFormat(days),
-            startTime: startTime,
-            endTime: endTime
-          },
-          location: location,
-          dates: { // Default semester dates - will be updated from academic calendar
-            startDate: "Jan 22, 2025",
-            endDate: "May 9, 2025"
-          }
-        });
-      }
-    }
-    
-    // Parse exam information
-    if (inExams) {
-      // Match patterns like "May 6, 5:05 PM - 7:05 PM - Location not specified"
-      const examMatch = line.match(/(.*\d+),\s+(\d+:\d+\s+[AP]M)\s+-\s+(\d+:\d+\s+[AP]M)\s+-\s+(.*)/);
-      if (examMatch) {
-        const date = examMatch[1];
-        const startTime = examMatch[2];
-        const endTime = examMatch[3];
-        const location = examMatch[4];
-        
-        currentCourse.finalExam = {
-          date: date,
-          time: `${startTime} - ${endTime}`,
-          location: location
-        };
-      }
-    }
-  }
-  
-  // Add the last course if exists
-  if (currentCourse) {
-    courses.push(currentCourse);
-  }
-  
-  // Convert to the format expected by the popup
-  return courses.map(course => {
-    // Find the primary section (usually LEC)
-    const mainSection = course.sections.find(s => s.type === 'LEC') || course.sections[0];
-    
-    return {
-      name: course.name,
-      courseId: course.courseId,
-      section: mainSection ? `${mainSection.type} ${mainSection.number}` : '',
-      instructor: '', // Not available in the text
-      schedule: mainSection ? mainSection.schedule : null,
-      location: mainSection ? mainSection.location : '',
-      dates: mainSection ? mainSection.dates : null,
-      finalExam: course.finalExam,
-      additionalSections: course.sections.filter(s => s !== mainSection)
-    };
-  });
-}
-
-// Extract course data from a structured element
-function extractStructuredCourseData(courseElement) {
-  try {
-    // Find the course name/title
-    const titleEl = courseElement.querySelector('h1, h2, h3, h4, h5, strong');
-    if (!titleEl) return null;
-    
-    const titleText = titleEl.textContent.trim();
-    const courseMatch = titleText.match(/([A-Z]+ \d+):\s*(.*)/);
-    if (!courseMatch) return null;
-    
-    const courseId = courseMatch[1];
-    const courseName = `${courseMatch[1]}: ${courseMatch[2]}`;
-    
-    // Initialize course object
-    const course = {
-      name: courseName,
-      courseId: courseId,
-      sections: []
-    };
-    
-    // Extract meeting information
-    const meetingSections = Array.from(courseElement.querySelectorAll('p, div, li')).filter(el => {
-      const text = el.textContent.trim();
-      return text.includes('LEC') || text.includes('DIS') || text.includes('LAB') || text.includes('SEM');
-    });
-    
-    meetingSections.forEach(section => {
-      const sectionText = section.textContent.trim();
-      const meetingMatch = sectionText.match(/(LEC|DIS|LAB|SEM)\s+(\d+)\s+([MTWRFS]+)\s+(\d+:\d+\s+[AP]M)\s+-\s+(\d+:\d+\s+[AP]M)\s+(.*)/);
-      
-      if (meetingMatch) {
-        const sectionType = meetingMatch[1];
-        const sectionNumber = meetingMatch[2];
-        const days = meetingMatch[3];
-        const startTime = meetingMatch[4];
-        const endTime = meetingMatch[5];
-        const location = meetingMatch[6] || "Location not specified";
-        
-        // Add the section to the course
-        course.sections.push({
-          type: sectionType,
-          number: sectionNumber,
-          schedule: {
-            days: convertDaysToICalFormat(days),
-            startTime: startTime,
-            endTime: endTime
-          },
-          location: location,
-          dates: { // Default semester dates - will be updated from academic calendar
-            startDate: "Jan 22, 2025",
-            endDate: "May 9, 2025"
-          }
-        });
-      }
-    });
-    
-    // Extract exam information
-    const examSections = Array.from(courseElement.querySelectorAll('p, div, li')).filter(el => {
-      const text = el.textContent.trim();
-      return text.includes('Exam') || text.includes('PM - ');
-    });
-    
-    if (examSections.length > 0) {
-      const examText = examSections[0].textContent.trim();
-      const examMatch = examText.match(/(.*\d+),\s+(\d+:\d+\s+[AP]M)\s+-\s+(\d+:\d+\s+[AP]M)\s+-\s+(.*)/);
-      
-      if (examMatch) {
-        const date = examMatch[1];
-        const startTime = examMatch[2];
-        const endTime = examMatch[3];
-        const location = examMatch[4];
-        
-        course.finalExam = {
-          date: date,
-          time: `${startTime} - ${endTime}`,
-          location: location
-        };
-      }
-    }
-    
-    // Convert to the format expected by the popup
-    const mainSection = course.sections.find(s => s.type === 'LEC') || course.sections[0];
-    
-    return {
-      name: course.name,
-      courseId: course.courseId,
-      section: mainSection ? `${mainSection.type} ${mainSection.number}` : '',
-      instructor: '', // Not available in the text
-      schedule: mainSection ? mainSection.schedule : null,
-      location: mainSection ? mainSection.location : '',
-      dates: mainSection ? mainSection.dates : null,
-      finalExam: course.finalExam,
-      additionalSections: course.sections.filter(s => s !== mainSection)
-    };
-  } catch (error) {
-    console.error("Error extracting structured course data:", error);
-    return null;
-  }
 }
 
 // Convert a schedule days string to iCal format (e.g., "TuTh" -> ["TU","TH"])
@@ -529,220 +402,3 @@ function convertDaysToICalFormat(daysStr) {
   console.debug(`Day conversion: "${daysStr}" → ${JSON.stringify(result)}`);
   return result;
 }
-
-// Original extraction methods as fallback
-function fallbackExtractCourseData() {
-  const courses = [];
-  
-  // Assuming each course is in a container with a class like 'course-container'
-  const courseElements = document.querySelectorAll('.course-container, .course-row, .enrolled-course');
-  
-  // If no courses found, try a more generic approach
-  if (courseElements.length === 0) {
-    console.warn("No courses found with specific selectors, trying generic table approach");
-    const tableCourses = extractCoursesFromTables();
-    if (tableCourses && tableCourses.length > 0) {
-      return tableCourses;
-    }
-  }
-  
-  courseElements.forEach(courseEl => {
-    try {
-      // Example extraction - adjust based on actual page structure
-      const courseNameEl = courseEl.querySelector('.course-name, .course-title, h3, strong');
-      const sectionEl = courseEl.querySelector('.section-number, .section');
-      const instructorEl = courseEl.querySelector('.instructor, .professor');
-      const scheduleEl = courseEl.querySelector('.schedule, .meeting-time');
-      const locationEl = courseEl.querySelector('.location, .room');
-      const datesEl = courseEl.querySelector('.dates, .course-dates');
-      
-      if (!courseNameEl) return; // Skip if no course name found
-      
-      const courseInfo = {
-        name: courseNameEl.textContent.trim(),
-        section: sectionEl ? sectionEl.textContent.trim() : '',
-        instructor: instructorEl ? instructorEl.textContent.trim() : '',
-        schedule: scheduleEl ? parseSchedule(scheduleEl.textContent.trim()) : null,
-        location: locationEl ? locationEl.textContent.trim() : '',
-        dates: datesEl ? parseDates(datesEl.textContent.trim()) : null
-      };
-      
-      courses.push(courseInfo);
-    } catch (error) {
-      console.error("Error extracting course data:", error);
-    }
-  });
-  
-  // If no courses were extracted, throw an error
-  if (courses.length === 0) {
-    throw new Error("No course data found on the page. Please make sure you're on the correct page and try again.");
-  }
-  
-  // Now also look for final exam information
-  extractFinalExams(courses);
-  
-  return courses;
-}
-
-// Try to extract courses from any tables on the page
-function extractCoursesFromTables() {
-  const tables = document.querySelectorAll('table');
-  const courses = [];
-  
-  tables.forEach(table => {
-    const rows = table.querySelectorAll('tr');
-    
-    // Skip the header row
-    for (let i = 1; i < rows.length; i++) {
-      const cells = rows[i].querySelectorAll('td');
-      if (cells.length >= 5) {
-        // Assuming a table structure like: Course Name | Section | Schedule | Location | Dates
-        const courseInfo = {
-          name: cells[0].textContent.trim(),
-          section: cells[1].textContent.trim(),
-          instructor: cells.length > 5 ? cells[2].textContent.trim() : '',
-          schedule: parseSchedule(cells[cells.length > 5 ? 3 : 2].textContent.trim()),
-          location: cells[cells.length > 5 ? 4 : 3].textContent.trim(),
-          dates: parseDates(cells[cells.length > 5 ? 5 : 4].textContent.trim())
-        };
-        
-        courses.push(courseInfo);
-      }
-    }
-  });
-  
-  return courses;
-}
-
-// Parse schedule string like "MWF 9:00 AM - 9:50 AM"
-function parseSchedule(scheduleStr) {
-  try {
-    const scheduleParts = scheduleStr.trim().split(' ');
-    
-    if (scheduleParts.length < 3) return null;
-    
-    // Extract days of week (using UW-Madison format: M=Monday, T=Tuesday, W=Wednesday, R=Thursday, F=Friday)
-    const daysStr = scheduleParts[0].toUpperCase();
-    
-    // Use our improved function to convert days correctly
-    const days = convertDaysToICalFormat(daysStr);
-    
-    // Find start and end times
-    let startTimeStr = '', endTimeStr = '';
-    let foundStartTime = false;
-    
-    // Look for time pattern like "9:00 AM - 9:50 AM"
-    for (let i = 1; i < scheduleParts.length; i++) {
-      const part = scheduleParts[i];
-      
-      // Time pattern: digits:digits
-      if (part.match(/\d+:\d+/)) {
-        // Combine the time with its AM/PM designator
-        const timeWithMeridiem = part + ' ' + scheduleParts[i+1];
-        
-        if (!foundStartTime) {
-          startTimeStr = timeWithMeridiem;
-          foundStartTime = true;
-        } else if (foundStartTime && part !== '-') {
-          endTimeStr = timeWithMeridiem;
-          break;
-        }
-      }
-      
-      // Handle the dash between times
-      if (part === '-') {
-        foundStartTime = true;
-      }
-    }
-    
-    return {
-      days: days,
-      startTime: startTimeStr,
-      endTime: endTimeStr
-    };
-  } catch (error) {
-    console.error("Error parsing schedule:", error);
-    return null;
-  }
-}
-
-// Parse date string like "Jan 23, 2023 - May 5, 2023"
-function parseDates(dateStr) {
-  try {
-    const dateParts = dateStr.split('-');
-    if (dateParts.length === 2) {
-      return {
-        startDate: dateParts[0].trim(),
-        endDate: dateParts[1].trim()
-      };
-    }
-    return null;
-  } catch (error) {
-    console.error("Error parsing dates:", error);
-    return null;
-  }
-}
-
-// Function to extract final exam information and add it to course objects
-function extractFinalExams(courses) {
-  try {
-    // Look for final exam information
-    // This will depend on the actual structure of the page
-    const examElements = [
-      ...document.querySelectorAll('.final-exam, .exam-info'),
-      ...Array.from(document.querySelectorAll('table')).filter(table =>
-        table.textContent.includes('Final Exam')
-      )
-    ];
-
-    if (examElements.length === 0) {
-      console.warn("No final exam information found on the page");
-      return;
-    }
-    
-    examElements.forEach(examEl => {
-      // Try to associate the exam with a course
-      // This might be based on course number, section, or other identifiers
-      const courseIdentifier = examEl.querySelector('.course-id, .course-number')?.textContent.trim();
-      const examDate = examEl.querySelector('.exam-date')?.textContent.trim();
-      const examTime = examEl.querySelector('.exam-time')?.textContent.trim();
-      const examLocation = examEl.querySelector('.exam-location')?.textContent.trim();
-      
-      if (!courseIdentifier || !examDate || !examTime) {
-        console.warn("Incomplete exam information found, skipping");
-        return;
-      }
-      
-      // Find the matching course
-      const matchingCourse = courses.find(course => {
-        // Match by course number/ID if available
-        if (course.courseId && course.courseId === courseIdentifier) {
-          return true;
-        }
-        // If no direct ID match, try matching by course name containing the identifier
-        return course.name.includes(courseIdentifier);
-      });
-      
-      if (matchingCourse) {
-        matchingCourse.finalExam = {
-          date: examDate,
-          time: examTime,
-          location: examLocation || ''
-        };
-      } else {
-        console.warn(`Could not find matching course for exam: ${courseIdentifier}`);
-        // Add as a standalone exam event if no matching course
-        courses.push({
-          name: `Final Exam: ${courseIdentifier}`,
-          finalExam: {
-            date: examDate,
-            time: examTime,
-            location: examLocation || ''
-          }
-        });
-      }
-    });
-  } catch (error) {
-    console.error("Error extracting final exam data:", error);
-  }
-

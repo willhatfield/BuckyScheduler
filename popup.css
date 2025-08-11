@@ -2,144 +2,170 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   margin: 0;
   padding: 0;
-  width: 400px;
-  color: #333;
+  width: 420px;
+  color: #1f2937; /* neutral-800 */
+  background: #fafafa; /* subtle app bg */
 }
 
 .container {
   padding: 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
 
 h1 {
   font-size: 18px;
-  margin-top: 0;
-  color: #c5050c; /* UW-Madison red */
+  margin: 0 0 12px 0;
+  color: #b1040e; /* UW red brand */
+  letter-spacing: 0.3px;
 }
 
 h2 {
   font-size: 16px;
   margin-top: 20px;
   margin-bottom: 10px;
+  color: #111827; /* neutral-900 */
 }
 
 h3 {
   font-size: 14px;
   margin-top: 16px;
   margin-bottom: 8px;
+  color: #374151;
 }
 
 button {
-  background-color: #c5050c;
+  background: linear-gradient(180deg, #c5050c 0%, #9b0000 100%);
   color: white;
   border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
+  padding: 10px 14px;
+  border-radius: 8px;
   cursor: pointer;
-  font-weight: bold;
+  font-weight: 600;
+  transition: transform 0.06s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(197,5,12,0.25);
 }
 
 button:hover {
-  background-color: #9b0000;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(197,5,12,0.28);
+}
+
+button:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 10px rgba(197,5,12,0.22);
 }
 
 button:disabled {
-  background-color: #cccccc;
+  background: #e5e7eb;
+  color: #9ca3af;
+  box-shadow: none;
   cursor: not-allowed;
+}
+
+.secondary-btn {
+  background: #6b7280;
+}
+.secondary-btn:hover {
+  box-shadow: 0 6px 16px rgba(107,114,128,0.28);
 }
 
 .status {
   margin-top: 12px;
-  font-style: italic;
-  color: #666;
+  font-style: normal;
+  font-size: 13px;
+  color: #6b7280;
 }
 
-.error {
-  color: #c5050c;
-}
+.error { color: #b91c1c; }
 
 .success {
-  color: #198754;
+  color: #065f46;
   white-space: pre-line;
-  padding: 10px;
-  background-color: #e8f6f0;
-  border-radius: 4px;
-  border-left: 4px solid #198754;
+  padding: 10px 12px;
+  background-color: #ecfdf5;
+  border-radius: 8px;
+  border-left: 4px solid #10b981;
   margin-top: 12px;
 }
 
-.hidden {
-  display: none;
-}
+.hidden { display: none; }
 
 #courses-list {
   margin-bottom: 16px;
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
   padding: 8px;
+  background: #ffffff;
 }
 
 .course-item {
-  padding: 8px;
-  border-bottom: 1px solid #eee;
+  padding: 10px;
+  border-bottom: 1px solid #f3f4f6;
 }
 
-.course-item:last-child {
-  border-bottom: none;
-}
+.course-item:last-child { border-bottom: none; }
 
-.course-name {
-  font-weight: bold;
-}
+.course-name { font-weight: 700; }
 
 .course-details {
   font-size: 13px;
-  color: #555;
+  color: #4b5563;
 }
 
-.options {
-  margin-bottom: 16px;
-}
+.options { margin-bottom: 16px; }
 
 .option-row {
-  margin-bottom: 8px;
-}
-
-.actions {
+  margin-bottom: 10px;
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
 }
 
-#download-btn {
-  background-color: #0479a8; /* UW-Madison blue */
+.option-row label {
+  font-weight: 600;
+  color: #374151;
 }
 
-#download-btn:hover {
-  background-color: #034e6c;
+.option-row input[type="checkbox"] {
+  margin-right: 8px;
+  accent-color: #c5050c;
 }
 
-#reset-btn {
-  background-color: #666;
+.option-row select {
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: white;
+  font-size: 14px;
+  color: #111827;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-#reset-btn:hover {
-  background-color: #555;
+.option-row select:focus {
+  outline: none;
+  border-color: #c5050c;
+  box-shadow: 0 0 0 3px rgba(197,5,12,0.15);
 }
+
+.actions { display: flex; justify-content: space-between; }
 
 /* Calendar selection styles */
-.calendar-selection {
-  margin-bottom: 20px;
-}
+.calendar-selection { margin-bottom: 20px; }
 
 .calendar-selection h3 {
   font-size: 14px;
   margin-bottom: 5px;
+  color: #374151;
 }
 
 .calendar-selection p {
   font-size: 13px;
-  color: #555;
+  color: #6b7280;
   margin-bottom: 10px;
 }
 
@@ -152,21 +178,22 @@ button:disabled {
 .calendar-option {
   flex: 1;
   text-align: center;
-  padding: 10px;
-  border: 2px solid #ddd;
-  border-radius: 6px;
+  padding: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
+  background: #ffffff;
 }
 
 .calendar-option:hover {
-  background-color: #f5f5f5;
-  border-color: #b5b5b5;
+  background-color: #f9fafb;
+  border-color: #d1d5db;
 }
 
 .calendar-option.selected {
-  border-color: #0479a8;
-  background-color: rgba(4, 121, 168, 0.1);
+  border-color: #c5050c;
+  background-color: #fff1f2; /* rose-50 */
 }
 
 .calendar-logo {
@@ -179,80 +206,80 @@ button:disabled {
 .calendar-option span {
   font-size: 12px;
   display: block;
+  font-weight: 600;
+  color: #374151;
 }
 
-/* Update the export button for consistency */
-#export-btn {
-  background-color: #0479a8; /* UW-Madison blue */
-}
-
-#export-btn:hover {
-  background-color: #034e6c;
-}
+#reset-btn { background: #6b7280; }
+#reset-btn:hover { box-shadow: 0 6px 16px rgba(107,114,128,0.28); }
 
 /* Fallback download section */
 #fallback-download {
   margin-top: 15px;
   padding: 12px;
-  background-color: #fef9e6;
-  border: 1px solid #f9dc5c;
-  border-radius: 6px;
+  background-color: #fff7ed; /* amber-50 */
+  border: 1px solid #fde68a; /* amber-300 */
+  border-radius: 10px;
   text-align: center;
   transition: all 0.3s ease;
 }
 
-#fallback-download.hidden {
-  display: none;
-}
+#fallback-download.hidden { display: none; }
 
 #fallback-download p {
   font-size: 13px;
-  color: #664d03;
+  color: #92400e;
   margin-bottom: 8px;
-  font-weight: 500;
-}
-
-#fallback-download-btn {
-  background-color: #0479a8;
-  margin: 8px auto;
-  display: block;
-}
-
-#fallback-download-btn:hover {
-  background-color: #034e6c;
+  font-weight: 600;
 }
 
 /* Calendar Instructions */
 .calendar-instructions {
   margin: 15px 0;
-  padding: 10px;
-  background-color: #f8f9fa;
-  border-radius: 6px;
-  border: 1px solid #ddd;
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
 }
 
-.instruction-panel {
-  margin-bottom: 0;
-}
+.instruction-panel { margin-bottom: 0; }
 
 .instruction-panel h4 {
   margin-top: 0;
   margin-bottom: 10px;
-  color: #0479a8;
+  color: #b1040e;
   font-size: 14px;
 }
 
-.instruction-panel ol {
-  margin: 0;
-  padding-left: 20px;
-}
+.instruction-panel ol { margin: 0; padding-left: 20px; }
 
 .instruction-panel li {
   margin-bottom: 5px;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-.instruction-panel li:last-child {
-  margin-bottom: 0;
+.instruction-panel li:last-child { margin-bottom: 0; } 
+
+.editable-hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin: -6px 0 8px 0;
+}
+
+.course-item[contenteditable="true"] {
+  outline: 2px dashed rgba(197,5,12,0.35);
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff7f7;
+}
+
+.course-field {
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.course-field[contenteditable="true"]:focus {
+  outline: 2px solid rgba(197,5,12,0.5);
+  background: #fff1f2;
 } 

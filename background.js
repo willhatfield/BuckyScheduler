@@ -32,20 +32,7 @@ if (chrome.scripting && chrome.scripting.onScriptExecuted) {
 // Function to fetch and parse the academic calendar
 async function fetchAcademicCalendar() {
   try {
-    // In a production extension, you would fetch the data directly from the website
-    // For now, we're using the data from https://secfac.wisc.edu/academic-calendar/
-    
-    const currentYear = new Date().getFullYear();
-    const nextYear = currentYear + 1;
-    
-    // Determines which academic year to use based on current month
-    // After July, use the upcoming academic year
-    const isAfterJuly = new Date().getMonth() >= 6; // 0-indexed, so 6 = July
-    const academicYearStart = isAfterJuly ? currentYear : currentYear - 1;
-    const academicYearEnd = academicYearStart + 1;
-    
     // Academic calendar data for 2025-2026
-    // Source: https://secfac.wisc.edu/academic-calendar/
     const calendar = {
       semester: {
         fall: {
@@ -80,11 +67,9 @@ async function fetchAcademicCalendar() {
           other: "2026-05-09"
         }
       },
-
-      // When Daylight Saving Time changes occur (2025-2026)
       dstChanges: {
-        spring: "2026-03-08", // Spring forward (2nd Sunday in March)
-        fall: "2025-11-02"    // Fall back (1st Sunday in November)
+        spring: "2026-03-08",
+        fall: "2025-11-02"
       }
     };
     

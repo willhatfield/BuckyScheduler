@@ -173,12 +173,18 @@ function generateCalendarData() {
   // Get user options
   const respectHolidays = respectHolidaysCheckbox.checked;
   const addAlerts = addAlertsCheckbox.checked;
-  console.log("Processing", extractedCourses.length, "courses...");
-  console.log(`Respect holidays option: ${respectHolidays}`);
+  const selectedTerm = document.getElementById('term-select').value;
+  const selectedTermLabel = document.getElementById('selected-term-label');
+  if (selectedTermLabel) {
+    const labelMap = { fall2025: 'Fall 2025', spring2026: 'Spring 2026', summer2025: 'Summer 2025', summer2026: 'Summer 2026' };
+    selectedTermLabel.textContent = labelMap[selectedTerm] || selectedTerm;
+  }
+  
+  console.log(`Selected term: ${selectedTerm}`);
   
   // Process each course
   extractedCourses.forEach(course => {
-    console.log(`Starting to process course: ${course.name}`);
+    
     
     // Process the main section if available
     if (course.schedule && course.dates) {
@@ -191,7 +197,7 @@ function generateCalendarData() {
     if (course.additionalSections && course.additionalSections.length > 0) {
       course.additionalSections.forEach(section => {
         if (section.schedule) {
-          console.log(`Processing additional section: ${section.type} ${section.number} for ${course.name}`);
+  
           
           // Create a location string that includes section type for better labeling
           const sectionLocation = section.location ? 
@@ -211,9 +217,6 @@ function generateCalendarData() {
   
   // Check if any events were added to the calendar
   const eventCount = cal.events().length;
-  console.log("TOTAL EVENTS added to calendar:", eventCount);
-  console.log("Event breakdown by title:");
-  
   // Count events by title for detailed breakdown
   const eventsByTitle = {};
   cal.events().forEach(event => {
@@ -222,11 +225,6 @@ function generateCalendarData() {
       eventsByTitle[title] = 0;
     }
     eventsByTitle[title]++;
-  });
-  
-  // Log breakdown
-  Object.keys(eventsByTitle).forEach(title => {
-    console.log(`  - ${title}: ${eventsByTitle[title]} events`);
   });
   
   if (eventCount === 0) {
@@ -241,16 +239,14 @@ function generateCalendarData() {
 
 // Export to Apple Calendar (download ICS file)
 function exportToAppleCalendar() {
-  console.log("Exporting to Apple Calendar...");
+  
   
   try {
     // Show fallback download option
     fallbackDownloadSection.classList.remove('hidden');
     
     // Try to download the calendar file
-    console.log("Attempting to download ICS file...");
     const calendarData = cal.download('UW_Madison_Courses');
-    console.log("Download function called, calendar data generated:", calendarData ? "yes" : "no");
     
     showSuccess(`
       Apple Calendar file generated! 
@@ -272,7 +268,7 @@ function exportToAppleCalendar() {
 
 // Export to Google Calendar (generate URL)
 function exportToGoogleCalendar() {
-  console.log("Exporting to Google Calendar...");
+
   
   try {
     // Create a temporary download for the ICS file
@@ -321,7 +317,7 @@ function exportToGoogleCalendar() {
 
 // Export to Outlook Calendar (generate URL or download)
 function exportToOutlookCalendar() {
-  console.log("Exporting to Outlook Calendar...");
+
   
   try {
     // Create a temporary download for the ICS file
@@ -375,7 +371,7 @@ function exportToOutlookCalendar() {
 // Function to handle manual download (Apple Calendar fallback)
 function manualDownload() {
   try {
-    console.log("Manual download triggered");
+
     
     if (!generatedCalendarData) {
       // Generate the data if it doesn't exist
@@ -430,21 +426,18 @@ async function extractSchedule() {
       throw new Error("Please navigate to the UW-Madison enrollment page first.");
     }
     
-    // First, inject the content script if it's not already there
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['courseDataExtractor.js', 'content.js']
-      });
-      console.log("Content scripts injected successfully");
-    } catch (error) {
-      console.warn("Content scripts may already be loaded:", error);
-      // Continue anyway as the script might already be there
-    }
+    // Content scripts are already loaded via manifest.json
+
     
     // Send message to content script with error handling
     try {
-      const response = await sendMessageToTab(tab.id, {action: "extractSchedule"});
+      const selectedTerm = document.getElementById('term-select').value;
+      console.log(`Sending selected term to content script: ${selectedTerm}`);
+      
+      const response = await sendMessageToTab(tab.id, {
+        action: "extractSchedule",
+        selectedTerm: selectedTerm
+      });
       
       if (response.success) {
         extractedCourses = response.data;
@@ -452,6 +445,13 @@ async function extractSchedule() {
         
         // Display the courses
         displayCourses(extractedCourses);
+        
+        // Update selected term heading label
+        const selectedTermLabel = document.getElementById('selected-term-label');
+        if (selectedTermLabel) {
+          const labelMap = { fall2025: 'Fall 2025', spring2026: 'Spring 2026', summer2025: 'Summer 2025', summer2026: 'Summer 2026' };
+          selectedTermLabel.textContent = labelMap[selectedTerm] || selectedTerm;
+        }
         
         // Show results view
         initialView.classList.add('hidden');
@@ -478,344 +478,271 @@ async function extractSchedule() {
 // Display the extracted courses in the UI
 function displayCourses(courses) {
   coursesListEl.innerHTML = '';
-  
-  courses.forEach(course => {
+
+  courses.forEach((course, idx) => {
     const courseEl = document.createElement('div');
     courseEl.className = 'course-item';
-    
+
+    // Course name (editable)
     const nameEl = document.createElement('div');
-    nameEl.className = 'course-name';
+    nameEl.className = 'course-name course-field';
+    nameEl.contentEditable = 'true';
     nameEl.textContent = course.name;
-    
+    nameEl.addEventListener('input', () => {
+      extractedCourses[idx].name = nameEl.textContent.trim();
+    });
+
+    // Details wrapper
     const detailsEl = document.createElement('div');
     detailsEl.className = 'course-details';
-    
-    let detailsText = '';
-    
-    // Main section info
-    if (course.section) {
-      detailsText += `Section: ${course.section}<br>`;
-    }
-    
-    if (course.instructor) {
-      detailsText += `Instructor: ${course.instructor}<br>`;
-    }
-    
-    if (course.schedule) {
-      const days = course.schedule.days.map(day => {
-        if (day === 'MO') return 'Mon';
-        if (day === 'TU') return 'Tue';
-        if (day === 'WE') return 'Wed';
-        if (day === 'TH') return 'Thu';
-        if (day === 'FR') return 'Fri';
-        if (day === 'SA') return 'Sat';
-        if (day === 'SU') return 'Sun';
-        return day;
-      }).join(', ');
-      
-      detailsText += `Schedule: ${days} ${course.schedule.startTime} - ${course.schedule.endTime}<br>`;
-    }
-    
-    if (course.location) {
-      detailsText += `Location: ${course.location}<br>`;
-    }
-    
-    if (course.dates) {
-      detailsText += `Dates: ${course.dates.startDate} - ${course.dates.endDate}<br>`;
-    }
-    
-    // Additional sections
+
+    // Section (editable)
+    const sectionEl = document.createElement('div');
+    sectionEl.className = 'course-field';
+    sectionEl.contentEditable = 'true';
+    sectionEl.textContent = course.section ? `Section: ${course.section}` : 'Section: ';
+    sectionEl.addEventListener('input', () => {
+      const v = sectionEl.textContent.replace(/^Section:\s*/i, '').trim();
+      extractedCourses[idx].section = v;
+    });
+
+    // Instructor (editable)
+    const instructorEl = document.createElement('div');
+    instructorEl.className = 'course-field';
+    instructorEl.contentEditable = 'true';
+    instructorEl.textContent = course.instructor ? `Instructor: ${course.instructor}` : 'Instructor: ';
+    instructorEl.addEventListener('input', () => {
+      const v = instructorEl.textContent.replace(/^Instructor:\s*/i, '').trim();
+      extractedCourses[idx].instructor = v;
+    });
+
+    // Schedule (editable: days, start, end)
+    const scheduleEl = document.createElement('div');
+    scheduleEl.className = 'course-field';
+    scheduleEl.contentEditable = 'true';
+    const daysText = (course.schedule?.days || []).map(d => (
+      d === 'MO' ? 'Mon' : d === 'TU' ? 'Tue' : d === 'WE' ? 'Wed' : d === 'TH' ? 'Thu' : d === 'FR' ? 'Fri' : d === 'SA' ? 'Sat' : d === 'SU' ? 'Sun' : d
+    )).join(', ');
+    scheduleEl.textContent = course.schedule ? `Schedule: ${daysText} ${course.schedule.startTime} - ${course.schedule.endTime}` : 'Schedule: ';
+    scheduleEl.addEventListener('input', () => {
+      const raw = scheduleEl.textContent.replace(/^Schedule:\s*/i, '').trim();
+      // Expect format: "Mon, Wed 11:00 AM - 12:15 PM"
+      // Split days and times
+      const match = raw.match(/^(.*)\s+(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+      if (match) {
+        const daysPart = match[1].trim();
+        const startTime = match[2].toUpperCase();
+        const endTime = match[3].toUpperCase();
+        const dayMap = { Mon: 'MO', Tue: 'TU', Wed: 'WE', Thu: 'TH', Fri: 'FR', Sat: 'SA', Sun: 'SU' };
+        const days = daysPart.split(',').map(s => dayMap[s.trim()] || s.trim()).filter(Boolean);
+        if (!extractedCourses[idx].schedule) extractedCourses[idx].schedule = {};
+        extractedCourses[idx].schedule.days = days;
+        extractedCourses[idx].schedule.startTime = startTime;
+        extractedCourses[idx].schedule.endTime = endTime;
+      }
+    });
+
+    // Location (editable)
+    const locationEl = document.createElement('div');
+    locationEl.className = 'course-field';
+    locationEl.contentEditable = 'true';
+    locationEl.textContent = course.location ? `Location: ${course.location}` : 'Location: ';
+    locationEl.addEventListener('input', () => {
+      const v = locationEl.textContent.replace(/^Location:\s*/i, '').trim();
+      extractedCourses[idx].location = v;
+    });
+
+    // Dates (editable: start - end)
+    const datesEl = document.createElement('div');
+    datesEl.className = 'course-field';
+    datesEl.contentEditable = 'true';
+    datesEl.textContent = course.dates ? `Dates: ${course.dates.startDate} - ${course.dates.endDate}` : 'Dates: ';
+    datesEl.addEventListener('input', () => {
+      const raw = datesEl.textContent.replace(/^Dates:\s*/i, '').trim();
+      const m = raw.match(/^(.*)\s*-\s*(.*)$/);
+      if (m) {
+        const start = m[1].trim();
+        const end = m[2].trim();
+        if (!extractedCourses[idx].dates) extractedCourses[idx].dates = {};
+        extractedCourses[idx].dates.startDate = start;
+        extractedCourses[idx].dates.endDate = end;
+      }
+    });
+
+    // Additional sections - render simple editable lines
+    const additionalEl = document.createElement('div');
+    additionalEl.className = 'course-field';
+    additionalEl.contentEditable = 'true';
+    let additionalText = '';
     if (course.additionalSections && course.additionalSections.length > 0) {
-      detailsText += `<br><strong>Additional Sections:</strong><br>`;
-      
-      course.additionalSections.forEach(section => {
-        detailsText += `${section.type} ${section.number}: `;
-        
-        if (section.schedule) {
-          const days = section.schedule.days.map(day => {
-            if (day === 'MO') return 'Mon';
-            if (day === 'TU') return 'Tue';
-            if (day === 'WE') return 'Wed';
-            if (day === 'TH') return 'Thu';
-            if (day === 'FR') return 'Fri';
-            if (day === 'SA') return 'Sat';
-            if (day === 'SU') return 'Sun';
-            return day;
-          }).join(', ');
-          
-          detailsText += `${days} ${section.schedule.startTime} - ${section.schedule.endTime}`;
-        }
-        
-        if (section.location) {
-          detailsText += ` at ${section.location}`;
-        }
-        
-        detailsText += `<br>`;
+      additionalText += 'Additional Sections:\n';
+      course.additionalSections.forEach((section, sidx) => {
+        const sDays = (section.schedule?.days || []).map(d => (
+          d === 'MO' ? 'Mon' : d === 'TU' ? 'Tue' : d === 'WE' ? 'Wed' : d === 'TH' ? 'Thu' : d === 'FR' ? 'Fri' : d === 'SA' ? 'Sat' : d === 'SU' ? 'Sun' : d
+        )).join(', ');
+        const sTime = section.schedule ? `${section.schedule.startTime} - ${section.schedule.endTime}` : '';
+        const sLoc = section.location ? ` at ${section.location}` : '';
+        additionalText += `${section.type} ${section.number}: ${sDays} ${sTime}${sLoc}\n`;
       });
     }
-    
-    // Add final exam information if available
-    if (course.finalExam) {
-      detailsText += `<br><strong>Final Exam:</strong> ${course.finalExam.date} ${course.finalExam.time}`;
-      if (course.finalExam.location && course.finalExam.location !== 'Location not specified') {
-        detailsText += ` at ${course.finalExam.location}`;
+    if (additionalText) additionalEl.textContent = additionalText.trim();
+    additionalEl.addEventListener('input', () => {
+      // Very light parser: each line like "DIS 301: Wed 2:25 PM - 3:15 PM at Location"
+      const lines = additionalEl.textContent.split(/\n+/).filter(Boolean);
+      const out = [];
+      lines.forEach(line => {
+        const m = line.match(/^(\w+)\s+(\d+):\s*(.*)$/);
+        if (!m) return;
+        const type = m[1];
+        const number = m[2];
+        const rest = m[3];
+        const m2 = rest.match(/^(.*)\s+(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)(?:\s+at\s+(.*))?$/i);
+        const dayMap = { Mon: 'MO', Tue: 'TU', Wed: 'WE', Thu: 'TH', Fri: 'FR', Sat: 'SA', Sun: 'SU' };
+        let days = [] , startTime = '', endTime = '', location = '';
+        if (m2) {
+          days = m2[1].split(',').map(s => dayMap[s.trim()] || s.trim()).filter(Boolean);
+          startTime = m2[2].toUpperCase();
+          endTime = m2[3].toUpperCase();
+          location = (m2[4] || '').trim();
+        }
+        out.push({ type, number, schedule: days.length ? { days, startTime, endTime } : null, location });
+      });
+      extractedCourses[idx].additionalSections = out;
+    });
+
+    // Final exam (editable)
+    const finalEl = document.createElement('div');
+    finalEl.className = 'course-field';
+    finalEl.contentEditable = 'true';
+    const finalText = course.finalExam ? `Final Exam: ${course.finalExam.date} ${course.finalExam.time}${course.finalExam.location ? ` at ${course.finalExam.location}` : ''}` : 'Final Exam: ';
+    finalEl.textContent = finalText;
+    finalEl.addEventListener('input', () => {
+      const raw = finalEl.textContent.replace(/^Final Exam:\s*/i, '').trim();
+      // Expect like: "Dec 15 2:45 PM - 4:45 PM at Hall 101" OR just date/time
+      const m = raw.match(/^(\w+\s+\d{1,2})(?:,?\s*(\d{4}))?\s+(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)(?:\s+at\s+(.*))?$/i);
+      if (!extractedCourses[idx].finalExam) extractedCourses[idx].finalExam = {};
+      if (m) {
+        extractedCourses[idx].finalExam.date = m[1] + (m[2] ? `, ${m[2]}` : '');
+        extractedCourses[idx].finalExam.time = `${m[3].toUpperCase()} - ${m[4].toUpperCase()}`;
+        extractedCourses[idx].finalExam.location = (m[5] || '').trim();
+      } else {
+        extractedCourses[idx].finalExam.date = raw;
       }
-    }
-    
-    detailsEl.innerHTML = detailsText;
-    
+    });
+
+    // Append fields
+    detailsEl.appendChild(sectionEl);
+    detailsEl.appendChild(instructorEl);
+    detailsEl.appendChild(scheduleEl);
+    detailsEl.appendChild(locationEl);
+    detailsEl.appendChild(datesEl);
+    if (additionalText) detailsEl.appendChild(additionalEl);
+    if (course.finalExam) detailsEl.appendChild(finalEl);
+
+    // Visual affordance: set whole item editable on click (with dashed outline)
+    courseEl.addEventListener('click', () => {
+      courseEl.setAttribute('contenteditable', 'true');
+      setTimeout(() => courseEl.focus(), 0);
+    });
+
     courseEl.appendChild(nameEl);
     courseEl.appendChild(detailsEl);
     coursesListEl.appendChild(courseEl);
   });
 }
 
+// Helper to compute exclude dates (EXDATE) at event start time for matching holidays
+function computeExcludeDates(academicCalendar, dayNumber, startHour, startMinute) {
+  const excludeDates = [];
+  if (!academicCalendar || !academicCalendar.holidays) return excludeDates;
+
+  academicCalendar.holidays.forEach(holiday => {
+    if (holiday.date) {
+      const d = new Date(holiday.date);
+      if (d.getDay() === dayNumber) {
+        d.setHours(startHour, startMinute, 0, 0);
+        excludeDates.push(new Date(d));
+      }
+    } else if (holiday.startDate && holiday.endDate) {
+      const start = new Date(holiday.startDate);
+      const end = new Date(holiday.endDate);
+      const cursor = new Date(start);
+      while (cursor <= end) {
+        if (cursor.getDay() === dayNumber) {
+          const ex = new Date(cursor);
+          ex.setHours(startHour, startMinute, 0, 0);
+          excludeDates.push(ex);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+  });
+
+  return excludeDates;
+}
+
 // Process a course section and add it to the calendar
 function processSection(course, schedule, location, dates, addAlerts, respectHolidays, academicCalendar) {
   try {
-    // Skip if missing required data
     if (!schedule || !schedule.days || !schedule.startTime || !schedule.endTime || !dates) {
       console.warn(`Skipping section of ${course.name} due to incomplete data`);
       return;
     }
-    
-    // Parse the date strings to Date objects
-    const courseStartDate = new Date(dates.startDate);
-    const courseEndDate = new Date(dates.endDate);
-    
-    console.log(`Processing section for ${course.name} from ${courseStartDate.toDateString()} to ${courseEndDate.toDateString()}`);
-    console.log(`This course meets on days: ${JSON.stringify(schedule.days)}`);
-    
-    // Parse the time strings
-    // Match patterns like "9:30 AM" or "2:45 PM"
-    const startTimeRegex = /(\d+):(\d+)\s+(AM|PM)/i;
-    const endTimeRegex = /(\d+):(\d+)\s+(AM|PM)/i;
-    
-    const startTimeParts = schedule.startTime.match(startTimeRegex);
-    const endTimeParts = schedule.endTime.match(endTimeRegex);
-    
-    if (!startTimeParts || !endTimeParts) {
-      console.warn(`Skipping ${course.name} due to invalid time format`);
-      return;
-    }
-    
-    // Get hours and minutes
-    let startHour = parseInt(startTimeParts[1]);
-    const startMinute = parseInt(startTimeParts[2]);
+
+    // Parse dates
+    const courseStartDate = parseDateString(dates.startDate);
+    const courseEndDate = parseDateString(dates.endDate);
+
+    // Parse times
+    const timeRegex = /(\d+):(\d+)\s+(AM|PM)/i;
+    const startTimeParts = schedule.startTime.match(timeRegex);
+    const endTimeParts = schedule.endTime.match(timeRegex);
+    if (!startTimeParts || !endTimeParts) return;
+
+    let startHour = parseInt(startTimeParts[1], 10);
+    const startMinute = parseInt(startTimeParts[2], 10);
     const startMeridiem = startTimeParts[3].toUpperCase();
-    
-    let endHour = parseInt(endTimeParts[1]);
-    const endMinute = parseInt(endTimeParts[2]);
+
+    let endHour = parseInt(endTimeParts[1], 10);
+    const endMinute = parseInt(endTimeParts[2], 10);
     const endMeridiem = endTimeParts[3].toUpperCase();
-    
-    // Convert to 24-hour format
+
     if (startMeridiem === 'PM' && startHour < 12) startHour += 12;
     if (startMeridiem === 'AM' && startHour === 12) startHour = 0;
-    
     if (endMeridiem === 'PM' && endHour < 12) endHour += 12;
     if (endMeridiem === 'AM' && endHour === 12) endHour = 0;
-    
+
     // Determine section type label
-    let sectionType = "LEC";
-    
-    // Check if this is being called for a specific additional section
+    let sectionType = 'LEC';
     if (course.additionalSections) {
       for (const section of course.additionalSections) {
-        // Compare schedule objects
         if (section.schedule === schedule) {
-          // Use the section type from the additional section
-          sectionType = section.type || "DIS";
+          sectionType = section.type || 'DIS';
           break;
         }
       }
     } else if (course.section) {
-      // Check main section type
-      if (course.section.includes("DIS")) {
-        sectionType = "DIS";
-      } else if (course.section.includes("LAB")) {
-        sectionType = "LAB";
-      } else if (course.section.includes("SEM")) {
-        sectionType = "SEM";
-      }
-    } 
-    
-    // If a section type was passed directly
-    if (location && location.includes(" - ")) {
-      const locationParts = location.split(" - ");
-      if (locationParts[0].includes("DIS")) {
-        sectionType = "DIS";
-      } else if (locationParts[0].includes("LAB")) {
-        sectionType = "LAB";
-      } else if (locationParts[0].includes("SEM")) {
-        sectionType = "SEM";
-      }
+      if (course.section.includes('DIS')) sectionType = 'DIS';
+      else if (course.section.includes('LAB')) sectionType = 'LAB';
+      else if (course.section.includes('SEM')) sectionType = 'SEM';
     }
-    
-    console.log(`Section type determined as: ${sectionType} for ${course.name}`);
-    
-    // Create the formatted event title with section type
+
     const eventTitle = `${sectionType}: ${course.name}`;
-    
-    // Count events created for debugging
-    let eventsCreatedForCourse = 0;
-    
-    // For each day of the week this class occurs
+
+    // For each weekday in this section, add one recurring event with EXDATEs (if enabled)
     schedule.days.forEach(dayOfWeek => {
-      console.log(`Processing day ${dayOfWeek} for ${course.name}`);
-      
-      // Get the numeric day of week (0 = Sunday, 1 = Monday, etc.)
       const dayNumber = getDayNumber(dayOfWeek);
-      
-      // If we're not respecting holidays, create a single recurring event
-      if (!respectHolidays || !academicCalendar || !academicCalendar.holidays) {
-        console.log(`Not respecting holidays for ${course.name} on ${dayOfWeek}`);
-        
-        addRecurringEvent(
-          cal, eventTitle, course.instructor, location || 'No location specified',
-          courseStartDate, courseEndDate, dayNumber, dayOfWeek,
-          startHour, startMinute, endHour, endMinute, addAlerts
-        );
-        
-        eventsCreatedForCourse++;
-      }
-      
-      // Sort holidays by start date
-      const sortedHolidays = [...academicCalendar.holidays]
-        .filter(holiday => {
-          // Convert dates for comparison
-          const holidayStartDate = holiday.date ? new Date(holiday.date) : new Date(holiday.startDate);
-          const holidayEndDate = holiday.date ? new Date(holiday.date) : new Date(holiday.endDate);
-          
-          // Debug logs
-          console.log(`Checking if holiday affects course: ${holiday.name}`);
-          console.log(`  Holiday: ${holidayStartDate.toDateString()} - ${holidayEndDate.toDateString()}`);
-          console.log(`  Course: ${courseStartDate.toDateString()} - ${courseEndDate.toDateString()}`);
-          
-          // Only include holidays that might affect this course
-          const affects = (
-            holidayEndDate >= courseStartDate && holidayStartDate <= courseEndDate
-          );
-          console.log(`  Affects course: ${affects}`);
-          return affects;
-        })
-        .map(holiday => {
-          if (holiday.date) {
-            return {
-              name: holiday.name,
-              start: new Date(holiday.date),
-              end: new Date(holiday.date)
-            };
-          } else {
-            return {
-              name: holiday.name,
-              start: new Date(holiday.startDate),
-              end: new Date(holiday.endDate)
-            };
-          }
-        })
-        .sort((a, b) => a.start.getTime() - b.start.getTime());
-        
-      console.log(`Found ${sortedHolidays.length} potential holidays for ${course.name} on ${dayOfWeek}:`);
-      sortedHolidays.forEach(h => console.log(`  - ${h.name}: ${h.start.toDateString()} to ${h.end.toDateString()}`));
-      
-      // Identify break points for this day of the week
-      const breakPoints = [];
-      
-      for (const holiday of sortedHolidays) {
-        // For single-day holidays, only break if they fall on this day of week
-        if (holiday.start.getTime() === holiday.end.getTime()) {
-          if (holiday.start.getDay() === dayNumber) {
-            breakPoints.push({
-              name: holiday.name,
-              lastDayBefore: new Date(holiday.start.getTime() - 86400000), // Day before holiday
-              firstDayAfter: new Date(holiday.end.getTime() + 86400000) // Day after holiday
-            });
-          }
-          continue;
-        }
-        
-        // For multi-day holidays, check if they include this day of week
-        let affectsThisDay = false;
-        const tempDate = new Date(holiday.start);
-        
-        // Check each day in the holiday period
-        while (tempDate <= holiday.end) {
-          if (tempDate.getDay() === dayNumber) {
-            affectsThisDay = true;
-            break;
-          }
-          tempDate.setDate(tempDate.getDate() + 1);
-        }
-        
-        if (affectsThisDay) {
-          breakPoints.push({
-            name: holiday.name,
-            lastDayBefore: new Date(holiday.start.getTime() - 86400000), // Day before holiday starts
-            firstDayAfter: new Date(holiday.end.getTime() + 86400000) // Day after holiday ends
-          });
-        }
-      }
-      
-      console.log(`Found ${breakPoints.length} break points for ${course.name} on day ${dayOfWeek}:`);
-      breakPoints.forEach(bp => console.log(`  - ${bp.name}: Last day before: ${bp.lastDayBefore.toDateString()}, First day after: ${bp.firstDayAfter.toDateString()}`));
-      
-      if (breakPoints.length === 0) {
-        // No breaks affect this class, create a single recurring event
-        console.log(`No breaks affect ${course.name} on ${dayOfWeek}, creating single recurring event`);
-        
-        addRecurringEvent(
-          cal, eventTitle, course.instructor, location || 'No location specified',
-          courseStartDate, courseEndDate, dayNumber, dayOfWeek,
-          startHour, startMinute, endHour, endMinute, addAlerts
-        );
-        
-        eventsCreatedForCourse++;
-      } else {
-        // Create separate events for each segment
-        let currentStartDate = new Date(courseStartDate);
-        
-        // For each break, create an event that ends right before the break
-        for (const breakPoint of breakPoints) {
-          // Skip if this break is entirely before our current position
-          if (breakPoint.lastDayBefore < currentStartDate) {
-            console.log(`Skipping ${breakPoint.name} as it's before our current start date ${currentStartDate.toDateString()}`);
-            continue;
-          }
-          
-          // Create event from current start to day before break
-          console.log(`Creating event from ${currentStartDate.toDateString()} to ${breakPoint.lastDayBefore.toDateString()} (before ${breakPoint.name})`);
-          
-          addRecurringEvent(
-            cal, eventTitle, course.instructor, location || 'No location specified',
-            currentStartDate, breakPoint.lastDayBefore, dayNumber, dayOfWeek,
-            startHour, startMinute, endHour, endMinute, addAlerts
-          );
-          
-          eventsCreatedForCourse++;
-          
-          // Move current start to day after break
-          currentStartDate = new Date(breakPoint.firstDayAfter);
-          console.log(`Setting new start date to ${currentStartDate.toDateString()} (after ${breakPoint.name})`);
-        }
-        
-        // Create final event from last break to end of semester
-        if (currentStartDate <= courseEndDate) {
-          console.log(`Creating final event from ${currentStartDate.toDateString()} to ${courseEndDate.toDateString()}`);
-          
-          addRecurringEvent(
-            cal, eventTitle, course.instructor, location || 'No location specified',
-            currentStartDate, courseEndDate, dayNumber, dayOfWeek,
-            startHour, startMinute, endHour, endMinute, addAlerts
-          );
-          
-          eventsCreatedForCourse++;
-        } else {
-          console.log(`No final event needed as last break extends beyond course end date`);
-        }
-      }
+
+      const excludeDates = respectHolidays
+        ? computeExcludeDates(academicCalendar, dayNumber, startHour, startMinute)
+        : [];
+
+      addRecurringEvent(
+        cal, eventTitle, course.instructor, location || 'No location specified',
+        courseStartDate, courseEndDate, dayNumber, dayOfWeek,
+        startHour, startMinute, endHour, endMinute, addAlerts, excludeDates
+      );
     });
-    
-    console.log(`Created ${eventsCreatedForCourse} events for ${course.name}`);
   } catch (error) {
     console.error(`Error processing section for course ${course.name}:`, error);
   }
@@ -823,38 +750,32 @@ function processSection(course, schedule, location, dates, addAlerts, respectHol
 
 // Helper function to add a recurring event
 function addRecurringEvent(
-  cal, title, instructor, location, 
+  cal, title, instructor, location,
   rangeStart, rangeEnd, dayNumber, dayOfWeek,
-  startHour, startMinute, endHour, endMinute, addAlerts
+  startHour, startMinute, endHour, endMinute, addAlerts, excludeDates
 ) {
   try {
-    // Find first occurrence of this day of week after rangeStart
     const firstDate = findFirstDayOccurrence(rangeStart, dayNumber);
-    
-    // If first occurrence is after rangeEnd, no event to create
     if (firstDate > rangeEnd) {
-      console.log(`No occurrences of ${dayOfWeek} between ${rangeStart.toDateString()} and ${rangeEnd.toDateString()}`);
       return;
     }
-    
-    // Set event times
+
     const eventStart = new Date(firstDate);
     eventStart.setHours(startHour, startMinute, 0);
-    
+
     const eventEnd = new Date(firstDate);
     eventEnd.setHours(endHour, endMinute, 0);
-    
-    // Create event options
+
     const eventOptions = {
       recurrenceRule: {
         freq: 'WEEKLY',
         until: rangeEnd,
         byday: [dayOfWeek]
       },
-      alarms: addAlerts ? [{action: 'display', trigger: {minutes: 15, before: true}}] : null
+      excludeDates: excludeDates && excludeDates.length ? excludeDates : null,
+      alarms: addAlerts ? [{ action: 'display', trigger: { minutes: 15, before: true } }] : null
     };
-    
-    // Add event to calendar
+
     cal.addEvent(
       title,
       instructor ? `Instructor: ${instructor}` : '',
@@ -863,10 +784,8 @@ function addRecurringEvent(
       eventEnd,
       eventOptions
     );
-    
-    console.log(`Added recurring event: ${title} on ${dayOfWeek} from ${eventStart.toLocaleString()} starting on ${firstDate.toDateString()} until ${rangeEnd.toDateString()}`);
   } catch (error) {
-    console.error("Error adding recurring event:", error);
+    console.error('Error adding recurring event:', error);
   }
 }
 
@@ -916,13 +835,13 @@ function getDayNumber(icalDay) {
 
 // Find the first occurrence of a day of the week on or after a given date
 function findFirstDayOccurrence(startDate, dayNumber) {
-  console.log(`Finding first ${getDayName(dayNumber)} on or after ${startDate.toDateString()}`);
+  
   
   const result = new Date(startDate);
   
   // If the start date is already the right day, use it
   if (result.getDay() === dayNumber) {
-    console.log(`Start date ${result.toDateString()} is already a ${getDayName(dayNumber)}`);
+
     return result;
   }
   
@@ -933,7 +852,7 @@ function findFirstDayOccurrence(startDate, dayNumber) {
     daysChecked++;
   }
   
-  console.log(`First ${getDayName(dayNumber)} found: ${result.toDateString()}`);
+  
   return result;
 }
 
@@ -1106,19 +1025,7 @@ function processFinalExam(course, academicCalendar, addAlerts) {
 function getAcademicCalendar() {
   // If we already have the academic calendar from initialization, return that
   if (academicCalendar) {
-    console.log("Using fetched academic calendar data");
-    
-    // Log all holidays in the fetched calendar
-    console.log("Fetched academic calendar holidays:");
-    if (academicCalendar.holidays) {
-      academicCalendar.holidays.forEach(holiday => {
-        if (holiday.date) {
-          console.log(`  - ${holiday.name}: ${holiday.date}`);
-        } else {
-          console.log(`  - ${holiday.name}: ${holiday.startDate} - ${holiday.endDate}`);
-        }
-      });
-    }
+
     
     return academicCalendar;
   }
@@ -1130,7 +1037,7 @@ function getAcademicCalendar() {
     semester: {
       fall: {
         start: "2025-09-03",
-        end: "2025-12-19"
+        end: "2025-12-10"
       },
       spring: {
         start: "2026-01-20",
@@ -1143,14 +1050,14 @@ function getAcademicCalendar() {
         date: "2025-09-01"
       },
       {
-        name: "Thanksgiving",
+        name: "Thanksgiving Recess",
         startDate: "2025-11-27",
         endDate: "2025-11-30"
       },
       {
         name: "Spring Break",
-        startDate: "2025-03-28",
-        endDate: "2025-04-05"
+        startDate: "2026-03-21",
+        endDate: "2026-03-29"
       },
       {
         name: "Martin Luther King Jr. Day",
@@ -1163,15 +1070,36 @@ function getAcademicCalendar() {
     }
   };
   
-  // Log all default holidays
-  console.log("Default academic calendar holidays:");
-  defaultCalendar.holidays.forEach(holiday => {
-    if (holiday.date) {
-      console.log(`  - ${holiday.name}: ${holiday.date}`);
-    } else {
-      console.log(`  - ${holiday.name}: ${holiday.startDate} - ${holiday.endDate}`);
-    }
-  });
+
   
   return defaultCalendar;
+} 
+
+// Helper function to parse date strings like "Sep 3, 2025"
+function parseDateString(dateStr) {
+  try {
+    // Handle format like "Sep 3, 2025"
+    const match = dateStr.match(/(\w+)\s+(\d+),\s+(\d+)/);
+    if (match) {
+      const monthName = match[1];
+      const day = parseInt(match[2]);
+      const year = parseInt(match[3]);
+      
+      const monthMap = {
+        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+      };
+      
+      const month = monthMap[monthName];
+      if (month !== undefined) {
+        return new Date(year, month, day);
+      }
+    }
+    
+    // Fallback to standard Date parsing
+    return new Date(dateStr);
+  } catch (error) {
+    console.error("Error parsing date string:", dateStr, error);
+    return new Date(dateStr);
+  }
 } 

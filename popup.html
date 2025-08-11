@@ -1,22 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>UW-Madison Schedule to Calendar</title>
+  <title>Bucky Scheduler</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="container">
-    <h1>UW Schedule to Calendar</h1>
+    <h1>Bucky Scheduler</h1>
     
-    <div id="initial-view">
-      <p>Extract your course schedule and export it to your preferred calendar application. Naviage to your "My-UW" page and click on "Course Schedule" to get started.
+    <div id="initial-view"><p>Download your class schedule and export it to your preferred calendar application. <a href="https://mumaaenroll.services.wisc.edu/courses-schedule" target="_blank" rel="noopener noreferrer">Navigate to your My-UW Course Schedule page</a> and click on "Course Schedule" to get started.
+      
+
       </p>
-      <button id="extract-btn">Extract Schedule</button>
+      <div class="option-row">
+        <label for="term-select">Select Term:</label>
+        <select id="term-select">
+          <option value="summer2025">Summer 2025</option>
+          <option value="fall2025" selected>Fall 2025</option>
+          <option value="spring2026">Spring 2026</option>
+        </select>
+      </div>
+      <button id="extract-btn">Download</button>
       <div id="status" class="status"></div>
     </div>
     
     <div id="results-view" class="hidden">
-      <h2>Extracted Courses</h2>
+      <h2>Your Schedule for <span id="selected-term-label"></span></h2>
+      <div class="editable-hint">You can edit any field below before downloading. Changes are saved automatically.</div>
       <div id="courses-list"></div>
       
       <div class="options">
@@ -102,7 +112,6 @@
     </div>
   </div>
 
-  <script src="moment.min.js"></script>
   <script src="ics.js"></script>
   <script src="popup.js"></script>
 </body>

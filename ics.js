@@ -1,4 +1,4 @@
-/* ics.js - v0.2.0 */
+/* ics.js - v0.2.0 (patched) */
 var ics = function(uidDomain, prodId) {
   'use strict';
 
@@ -39,53 +39,148 @@ var ics = function(uidDomain, prodId) {
     'END:VTIMEZONE'
   ].join(SEPARATOR);
   var calendarEnd = SEPARATOR + 'END:VCALENDAR';
-  var BYDAY_VALUES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 
+  // --------- Helpers / Fixes ----------
+
+  // Default semester end (local Central time). Adjust if needed.
+  var DEFAULT_SEMESTER_END_LOCAL = new Date('2025-12-19T23:59:59-06:00');
+
+  function toDate(x) {
+    if (x instanceof Date) return new Date(x.getTime());
+    if (typeof x === 'number') return new Date(x);     // epoch ms
+    if (typeof x === 'string') return new Date(x);      // ISO-ish
+    throw new Error('Invalid date input: ' + x);
+  }
+
+  // If caller didn't provide COUNT or UNTIL, apply default UNTIL (semester end)
+  function computeUntilUTC(recurrenceRule) {
+    if (recurrenceRule && recurrenceRule.until) {
+      var d = toDate(recurrenceRule.until);
+      d.setHours(23, 59, 59, 0); // include last day
+      return formatDateUTC(d);
+    }
+    // If COUNT is provided, don't force UNTIL (RFC recommends not mixing)
+    if (recurrenceRule && recurrenceRule.count) return null;
+
+    // No until/count provided -> default to semester end
+    var def = new Date(DEFAULT_SEMESTER_END_LOCAL.getTime());
+    def.setHours(23, 59, 59, 0);
+    return formatDateUTC(def);
+  }
+
+  // Build an EXDATE at the same local time-of-day as event start, on holiday date
+  function exdateAtLocalStart(holidayYMD, eventLocalStart) {
+    var base = toDate(holidayYMD);       // e.g., '2025-11-27'
+    var start = toDate(eventLocalStart); // actual event start
+    base.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+    return formatDate(base);             // local YYYYMMDDTHHMMSS
+  }
+
+  function formatDate(date) {
+    // Local time: YYYYMMDDTHHMMSS
+    var d = toDate(date);
+    const pad = (n) => n < 10 ? '0' + n : '' + n;
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    const seconds = pad(d.getSeconds());
+    return year + month + day + 'T' + hours + minutes + seconds;
+  }
+
+  function formatDateUTC(date) {
+    // UTC: YYYYMMDDTHHMMSSZ
+    var d = toDate(date);
+    const pad = (n) => n < 10 ? '0' + n : '' + n;
+    const year = d.getUTCFullYear();
+    const month = pad(d.getUTCMonth() + 1);
+    const day = pad(d.getUTCDate());
+    const hours = pad(d.getUTCHours());
+    const minutes = pad(d.getUTCMinutes());
+    const seconds = pad(d.getUTCSeconds());
+    return year + month + day + 'T' + hours + minutes + seconds + 'Z';
+  }
+
+  function generateUID(subject, start) {
+    var s = (subject || '') + '';
+    var safe = encodeURIComponent(s).replace(/%20/g, '').replace(/[^a-z0-9]/gi, '');
+    var t = (start instanceof Date) ? start.getTime() : toDate(start).getTime();
+    return safe + t + '@' + uidDomain;
+  }
+
+  // FileSaver.js helper
+  function saveAs(blob, filename) {
+    try {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function() {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(a.href);
+      }, 100);
+    } catch (e) {
+      console.error('Error saving file:', e);
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+      } else {
+        console.error('Could not save file. Browser may not support download API.');
+      }
+    }
+  }
+
+  // -------------- Public API ---------------
   return {
-    /**
-     * Returns events array
-     * @return {array} Events
-     */
     'events': function() {
       return calendarEvents;
     },
 
-    /**
-     * Returns calendar
-     * @return {string} Calendar in iCalendar format
-     */
     'calendar': function() {
       return calendarStart + SEPARATOR + calendarEvents.join(SEPARATOR) + calendarEnd;
     },
 
     /**
      * Add event to the calendar
-     * @param  {string} subject     Subject/Title of event
-     * @param  {string} description Description of event
-     * @param  {string} location    Location of event
-     * @param  {string} begin       Beginning date of event
-     * @param  {string} stop        Ending date of event
-     * @param  {object} options     Additional event options
+     * @param  {string} subject
+     * @param  {string} description
+     * @param  {string} location
+     * @param  {Date|number|string} begin
+     * @param  {Date|number|string} stop
+     * @param  {object} options
+     *   - recurrenceRule: {
+     *       freq: 'WEEKLY'|'DAILY'|...,
+     *       until?: Date|string|number,
+     *       count?: number,
+     *       interval?: number,
+     *       byday?: string[] // e.g., ['MO','WE','FR']
+     *     }
+     *   - holidays?: string[] // e.g., ['2025-11-27','2025-11-28']
+     *   - excludeDates?: (Date|string|number)[]
+     *   - alarms?: [{ action: 'display', trigger: { minutes?: number, before?: boolean, date?: Date|string|number } }]
      */
     'addEvent': function(subject, description, location, begin, stop, options) {
-      // I'm not in the mood to validate the inputs, so just don't mess up
       if (typeof subject === 'undefined' ||
-        typeof description === 'undefined' ||
-        typeof location === 'undefined' ||
-        typeof begin === 'undefined' ||
-        typeof stop === 'undefined'
-      ) {
+          typeof description === 'undefined' ||
+          typeof location === 'undefined' ||
+          typeof begin === 'undefined' ||
+          typeof stop === 'undefined') {
         return false;
       }
 
       options = options || {};
-      
-      var start = formatDate(begin);
-      var end = formatDate(stop);
+
+      // Coerce dates to avoid malformed stamps
+      var beginDate = toDate(begin);
+      var stopDate  = toDate(stop);
+
+      var start = formatDate(beginDate);
+      var end   = formatDate(stopDate);
 
       var calendarEvent = [
         'BEGIN:VEVENT',
-        'UID:' + generateUID(subject, begin),
+        'UID:' + generateUID(subject, beginDate),
         'CLASS:PUBLIC',
         'DESCRIPTION:' + description,
         'DTSTAMP:' + formatDateUTC(new Date()),
@@ -96,51 +191,52 @@ var ics = function(uidDomain, prodId) {
         'TRANSP:TRANSPARENT'
       ];
 
-      // Handle recurrence rule if provided
+      // Recurrence
       if (options.recurrenceRule) {
-        var rrule = 'RRULE:FREQ=' + options.recurrenceRule.freq;
-        
-        if (options.recurrenceRule.until) {
-          rrule += ';UNTIL=' + formatDate(options.recurrenceRule.until);
+        var rr = options.recurrenceRule;
+        var rrule = 'RRULE:FREQ=' + rr.freq;
+
+        // Prefer caller-provided UNTIL; else if COUNT given, keep COUNT; else default UNTIL
+        var untilUTC = computeUntilUTC(rr);
+        if (untilUTC) rrule += ';UNTIL=' + untilUTC;
+
+        if (rr.count)    rrule += ';COUNT=' + rr.count;
+        if (rr.interval) rrule += ';INTERVAL=' + rr.interval;
+        if (rr.byday && rr.byday.length) {
+          rrule += ';BYDAY=' + rr.byday.join(',');
         }
-        
-        if (options.recurrenceRule.count) {
-          rrule += ';COUNT=' + options.recurrenceRule.count;
-        }
-        
-        if (options.recurrenceRule.interval) {
-          rrule += ';INTERVAL=' + options.recurrenceRule.interval;
-        }
-        
-        if (options.recurrenceRule.byday && options.recurrenceRule.byday.length) {
-          rrule += ';BYDAY=' + options.recurrenceRule.byday.join(',');
-        }
-        
         calendarEvent.push(rrule);
       }
-      
-      // Handle excluded dates
+
+      // Explicit excluded dates
       if (options.excludeDates && options.excludeDates.length) {
         options.excludeDates.forEach(function(date) {
-          calendarEvent.push('EXDATE;TZID=America/Chicago:' + formatDate(date));
+          calendarEvent.push('EXDATE;TZID=America/Chicago:' + formatDate(toDate(date)));
         });
       }
-      
-      // Handle alarms
+
+      // Holidays to pause series (use event's local start time)
+      if (options.holidays && options.holidays.length) {
+        options.holidays.forEach(function(h) {
+          calendarEvent.push('EXDATE;TZID=America/Chicago:' + exdateAtLocalStart(h, beginDate));
+        });
+      }
+
+      // Alarms
       if (options.alarms && options.alarms.length) {
         options.alarms.forEach(function(alarm) {
           calendarEvent.push('BEGIN:VALARM');
           calendarEvent.push('ACTION:' + alarm.action);
-          
+
           if (alarm.trigger) {
-            if (alarm.trigger.minutes) {
+            if (typeof alarm.trigger.minutes === 'number') {
               var sign = alarm.trigger.before ? '-' : '';
               calendarEvent.push('TRIGGER:' + sign + 'PT' + alarm.trigger.minutes + 'M');
             } else if (alarm.trigger.date) {
-              calendarEvent.push('TRIGGER;VALUE=DATE-TIME:' + formatDate(alarm.trigger.date));
+              calendarEvent.push('TRIGGER;VALUE=DATE-TIME:' + formatDate(toDate(alarm.trigger.date)));
             }
           }
-          
+
           calendarEvent.push('END:VALARM');
         });
       }
@@ -150,11 +246,6 @@ var ics = function(uidDomain, prodId) {
       return calendarEvent;
     },
 
-    /**
-     * Download calendar using the saveAs function from FileSaver.js
-     * @param  {string} filename Filename
-     * @param  {string} ext      Extention
-     */
     'download': function(filename, ext) {
       if (calendarEvents.length < 1) {
         return false;
@@ -163,66 +254,10 @@ var ics = function(uidDomain, prodId) {
       ext = (typeof ext !== 'undefined') ? ext : '.ics';
       filename = (typeof filename !== 'undefined') ? filename : 'calendar';
       var calendar = calendarStart + SEPARATOR + calendarEvents.join(SEPARATOR) + calendarEnd;
-      
+
       var blob = new Blob([calendar], { type: 'text/calendar;charset=utf-8' });
       saveAs(blob, filename + ext);
       return calendar;
     }
   };
-
-  function formatDate(date) {
-    // Format date in local time for consistent display across DST changes
-    // Format: YYYYMMDDTHHMMSS (local time)
-    const pad = (n) => n < 10 ? '0' + n : n;
-    
-    const year = date.getFullYear();
-    const month = pad(date.getMonth() + 1);
-    const day = pad(date.getDate());
-    const hours = pad(date.getHours());
-    const minutes = pad(date.getMinutes());
-    const seconds = pad(date.getSeconds());
-    
-    return year + month + day + 'T' + hours + minutes + seconds;
-  }
-  
-  function formatDateUTC(date) {
-    // Format date in UTC for timestamp fields that require it
-    var formatted = date.toISOString().replace(/-|:|\.\d+/g, '');
-    
-    // Make sure it ends with Z to indicate UTC time
-    if (formatted.charAt(formatted.length - 1) !== 'Z') {
-      formatted += 'Z';
-    }
-    
-    return formatted;
-  }
-
-  function generateUID(subject, start) {
-    var uid = encodeURIComponent(subject).replace(/%20/g, '').replace(/[^a-z0-9]/gi, '') + start.getTime() + '@' + uidDomain;
-    return uid;
-  }
-
-  // FileSaver.js implementation for downloading files
-  function saveAs(blob, filename) {
-    try {
-      // Create a download link and trigger it
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a); // Append to body for Firefox compatibility
-      a.click();
-      setTimeout(function() {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(a.href);
-      }, 100);
-    } catch (e) {
-      console.error('Error saving file:', e);
-      // Fallback method for some browsers
-      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-        window.navigator.msSaveOrOpenBlob(blob, filename);
-      } else {
-        console.error('Could not save file. Browser may not support download API.');
-      }
-    }
-  }
-}; 
+};
