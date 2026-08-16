@@ -5,12 +5,13 @@ Convert your UW–Madison Course Schedule into a clean calendar you can import i
 ## Highlights
 - Extracts courses directly from the UW Course Schedule page (`https://mumaaenroll.services.wisc.edu/courses-schedule`).
 - Accurate semester handling:
-  - Fall 2025 classes: Sep 3 – Dec 10, 2025 (end before finals)
-  - Spring 2026 classes: Jan 20 – May 1, 2026
+  - Fall 2026 through Summer 2031 from UW–Madison's published academic calendar
+  - Dynamic term availability based on the current date in `America/Chicago`
+  - Separate 3-week, 4-week, and 8-week Summer sessions
 - Smart iCalendar (ICS) generation:
   - Proper timezone (America/Chicago) with VTIMEZONE
   - Weekly RRULEs with correct UTC UNTIL (end-of-day)
-  - EXDATEs to skip holidays (Labor Day; Thanksgiving/Day after)
+  - EXDATEs for term-specific holidays and instructional recesses
   - Final exam events
 - Multi-calendar export (Apple, Google, Outlook)
 - Inline editing of extracted courses prior to export
@@ -23,7 +24,7 @@ Convert your UW–Madison Course Schedule into a clean calendar you can import i
 4. Pin the extension if desired.
 
 ## Usage
-1. Open the popup and select the term (Summer 2025, Fall 2025, Spring 2026).
+1. Open the popup and select an available term. For Summer, also select the 3-week, 4-week, or 8-week session.
 2. Click the link to open the UW Course Schedule page and ensure you are logged in.
 3. Click “Download” (Extract Schedule) in the popup.
 4. Review the “Your Schedule for …” view.
@@ -33,26 +34,25 @@ Convert your UW–Madison Course Schedule into a clean calendar you can import i
 
 ## Editing Guidelines (Inline)
 - Schedule format example: `Mon, Wed 11:00 AM - 12:15 PM`
-- Dates format example: `Sep 3, 2025 - Dec 10, 2025`
+- Dates format example: `Sep 2, 2026 - Dec 9, 2026`
 - Additional section lines example:
   - `DIS 301: Wed 2:25 PM - 3:15 PM at Engineering Hall Room B209`
 - Final exam example:
   - `Dec 17 12:25 PM - 2:25 PM at Hall 101`
 
 ## Academic Calendar & Holidays
-- Fall 2025 classes stop on Dec 10, 2025, before finals.
-- Spring 2026 classes stop on May 1, 2026.
-- Holiday EXDATEs are added at the event start time for:
-  - Labor Day: 2025-09-01 (if the class meets Monday)
-  - Thanksgiving Recess: 2025-11-27 – 2025-11-30 (Thu/Fri classes receive EXDATEs)
+- `academicCalendar.js` is the single source of truth for all supported academic dates.
+- Supported terms begin with Fall 2026 and end with Summer 2031.
+- Once a term begins, earlier terms are removed from the picker. Summer becomes current at the earliest Summer session start and remains available until the next Fall begins.
+- Holiday EXDATEs are added at the event start time for Labor Day, Thanksgiving recess, Martin Luther King Jr. Day, spring recess, Memorial Day, and observed Independence Day when they intersect the selected term or Summer session.
 - Timezone handling uses America/Chicago with DST transitions embedded in ICS.
 
 ## Files Overview
 - `manifest.json` – Chrome extension manifest
+- `academicCalendar.js` – canonical academic calendar class and 2026–2031 date data
 - `popup.html`, `popup.css`, `popup.js` – Popup UI, UX, and orchestration
 - `content.js` – Message listener and bridge for extraction
 - `courseDataExtractor.js` – Robust JSON-based extraction logic
-- `background.js` – Academic calendar data provider
 - `ics.js` – ICS creation with timezone and recurrence support
 
 ## Permissions
@@ -61,9 +61,9 @@ Convert your UW–Madison Course Schedule into a clean calendar you can import i
 - Host permissions: `https://mumaaenroll.services.wisc.edu/*` for schedule extraction
 
 ## Troubleshooting
-- “Receiving end does not exist”: ensure you are on the Course Schedule page and that the tab is active, then click Download again.
+- If the Course Schedule tab was already open when the extension was reloaded, click Download again; the extension will inject its current extractor automatically.
 - No courses found: confirm you’re signed in and the schedule page is loaded; select the correct term in the popup and retry.
-- Recurrences look wrong or never end: ensure you selected the correct term; Fall ends Dec 10, Spring ends May 1.
+- Recurrences look wrong or never end: ensure you selected the correct term and Summer session.
 - Holiday not skipped: verify “Exclude university holidays” is checked before export.
 
 ## Privacy
@@ -72,8 +72,9 @@ Convert your UW–Madison Course Schedule into a clean calendar you can import i
 - Generated ICS files are downloaded locally.
 
 ## Development Notes
-- The generator uses one weekly RRULE per weekday with a UTC UNTIL at semester end (end-of-day), and per-event EXDATEs for holidays.
+- The generator uses one weekly RRULE per weekday with a UTC UNTIL at the selected term/session end (end-of-day in America/Chicago), and per-event EXDATEs for holidays.
 - Final exam dates are added as single VEVENTs.
+- Run the dependency-free test suite with `node --test`.
 
 ## License
 MIT

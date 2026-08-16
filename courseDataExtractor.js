@@ -1,8 +1,8 @@
 // Parsing and extraction logic moved from content.js
-function extractCourseData(selectedTerm = null) {
+function extractCourseData(termConfig = null) {
   try {
     console.log("Starting course data extraction...");
-    console.log(`Using selected term: ${selectedTerm}`);
+    console.log(`Using selected term: ${termConfig?.label || 'none'}`);
     
     // Extract the JSON data from the page
     const jsonData = extractJSONDataFromPage();
@@ -19,7 +19,7 @@ function extractCourseData(selectedTerm = null) {
       console.log("Terms data found:", jsonData.terms);
     }
     
-    return parseJSONData(jsonData, selectedTerm);
+    return parseJSONData(jsonData, termConfig);
   } catch (error) {
     console.error("Error extracting course data:", error);
     throw new Error("Failed to extract course data. Error: " + error.message);
@@ -101,8 +101,9 @@ function extractJSONDataFromPage() {
 }
 
 // Parse the extracted JSON data into course objects
-function parseJSONData(jsonData, selectedTerm) {
+function parseJSONData(jsonData, termConfig) {
   const courses = [];
+  const semesterDates = getConfiguredTermDates(termConfig);
   
   console.log("Parsing JSON data:", jsonData);
   
@@ -179,13 +180,7 @@ function parseJSONData(jsonData, selectedTerm) {
         // Convert day initials - ensuring UW-Madison format is properly handled (R = Thursday, T = Tuesday)
         const dayInitials = meeting.dayInitials || meeting.days || "";
         
-        // Get term name from selected term or JSON data
-        const termName = selectedTerm || jsonData.terms?.present?.name || jsonData.currentTerm?.name || jsonData.term?.name;
-        console.log(`Term name being used: "${termName}"`);
-        
-        const semesterDates = getSemesterDates(termName);
-        console.log(`Semester dates for ${courseInfo[courseId].name}:`, semesterDates);
-        console.log(`Course: ${courseInfo[courseId].name}, Term: "${termName}", Dates: ${semesterDates.startDate} - ${semesterDates.endDate}`);
+        console.log(`Course: ${courseInfo[courseId].name}, Term: "${termConfig.label}", Dates: ${semesterDates.startDate} - ${semesterDates.endDate}`);
         
         courseInfo[courseId].sections.push({
           type: classItem.type || classItem.sectionType || "LEC",
@@ -196,7 +191,7 @@ function parseJSONData(jsonData, selectedTerm) {
             endTime: formatTime(meeting.end || meeting.endTime)
           },
           location: meeting.location || classItem.location || "Location not specified",
-          dates: semesterDates
+          dates: { ...semesterDates }
         });
       }
       
@@ -266,108 +261,35 @@ function formatExamDate(dateStr) {
     
     const month = months[date.getMonth()];
     const day = date.getDate();
+    const year = date.getFullYear();
     
-    return `${month} ${day}`;
+    return `${month} ${day}, ${year}`;
   } catch (error) {
     console.error("Error formatting exam date:", error);
     return dateStr;
   }
 }
 
-function getSemesterDates(termName) {
-  // Use the correct academic year dates for 2025-2026
-  // Fall 2025: September 3 - December 10, 2025 (last class day)
-  // Spring 2026: January 20 - May 1, 2026
-  
-  console.log(`getSemesterDates called with termName: "${termName}"`);
-  
-  // Format date strings with month numbers for consistency
-  const formatDate = (month, day, year) => {
-    return `${monthNumberToName(month)} ${day}, ${year}`;
-  };
-  
-  // If no term name provided, try to detect it from the page
-  if (!termName) {
-    // Look for term information in the page
-    const termSelectors = [
-      'select[name*="term"] option[selected]',
-      '.term-selector option[selected]',
-      '[data-term]',
-      '.current-term',
-      'h1, h2, h3, h4, h5, h6'
-    ];
-    
-    console.log("No term name provided, searching page for term information...");
-    
-    for (const selector of termSelectors) {
-      const elements = document.querySelectorAll(selector);
-      console.log(`Searching selector "${selector}": found ${elements.length} elements`);
-      
-      for (const element of elements) {
-        const text = element.textContent || element.value || '';
-        console.log(`Element text: "${text}"`);
-        
-        if (text.includes('Fall') || text.includes('Spring') || text.includes('Summer')) {
-          termName = text;
-          console.log(`Detected term from page: "${termName}"`);
-          break;
-        }
-      }
-      if (termName) break;
-    }
+function getConfiguredTermDates(termConfig) {
+  if (!termConfig || !termConfig.startDate || !termConfig.endDate) {
+    throw new Error('The selected academic term does not have a valid date range.');
   }
-  
-  // Use the appropriate academic year
-  if (termName) {
-    console.log(`Processing term: "${termName}"`);
-    
-    // Handle new term format (fall2025, spring2026, summer2026)
-    if (termName === 'fall2025' || termName.includes('Fall')) {
-      console.log('Detected Fall semester');
-      // Fall semester dates for 2025 (classes end Dec 10)
-      return {
-        startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
-        endDate: formatDate(12, 10, 2025)  // Dec 10, 2025
-      };
-    } else if (termName === 'spring2026' || termName.includes('Spring')) {
-      console.log('Detected Spring semester');
-      // Spring semester dates for 2026
-      return {
-        startDate: formatDate(1, 20, 2026),  // Jan 20, 2026
-        endDate: formatDate(5, 1, 2026)  // May 1, 2026
-      };
-    } else if (termName === 'summer2026' || termName.includes('Summer')) {
-      console.log('Detected Summer semester');
-      // Summer semester dates for 2026
-      return {
-        startDate: formatDate(5, 19, 2026),  // May 19, 2026
-        endDate: formatDate(8, 8, 2026)  // Aug 8, 2026
-      };
-    } else {
-      console.log(`Term "${termName}" not recognized, checking for other patterns...`);
-      // Try to detect based on other patterns
-      if (termName.toLowerCase().includes('fall') || termName.toLowerCase().includes('autumn')) {
-        console.log('Detected Fall semester via alternative pattern');
-        return {
-          startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
-          endDate: formatDate(12, 10, 2025)  // Dec 10, 2025
-        };
-      }
-    }
-  }
-  
-  console.log('No term name provided or not recognized, defaulting to Fall 2025');
-  // Default to Fall 2025 semester if term name is not recognized (classes end Dec 10)
+
   return {
-    startDate: formatDate(9, 3, 2025),  // Sep 3, 2025
-    endDate: formatDate(12, 10, 2025)  // Dec 10, 2025
+    startDate: formatISODateForDisplay(termConfig.startDate),
+    endDate: formatISODateForDisplay(termConfig.endDate)
   };
 }
 
-// Helper function to convert month number to name (0-based index to month name)
-function monthNumberToName(monthNumber) {
+function formatISODateForDisplay(isoDate) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) throw new Error(`Invalid academic calendar date: ${isoDate}`);
+
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return months[monthNumber - 1] || 'Jan'; // Subtract 1 because months array is 0-indexed but our input is 1-indexed
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return `${months[month - 1]} ${day}, ${year}`;
 }
 
 // Convert a schedule days string to iCal format (e.g., "TuTh" -> ["TU","TH"])

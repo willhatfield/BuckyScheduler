@@ -125,6 +125,8 @@ button:disabled {
   gap: 10px;
 }
 
+.option-row.hidden { display: none; }
+
 .option-row label {
   font-weight: 600;
   color: #374151;
@@ -259,7 +261,7 @@ button:disabled {
   line-height: 1.45;
 }
 
-.instruction-panel li:last-child { margin-bottom: 0; } 
+.instruction-panel li:last-child { margin-bottom: 0; }
 
 .editable-hint {
   font-size: 12px;
@@ -282,4 +284,4 @@ button:disabled {
 .course-field[contenteditable="true"]:focus {
   outline: 2px solid rgba(197,5,12,0.5);
   background: #fff1f2;
-} 
+}

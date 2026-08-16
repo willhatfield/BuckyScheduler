@@ -1,6 +1,8 @@
 // Initialize variables to store the course data and calendar
 let extractedCourses = [];
 let academicCalendar = null;
+let calendarCatalog = null;
+const calendarService = new AcademicCalendar();
 let cal = null;
 let selectedCalendarType = "apple"; // Default to Apple Calendar
 
@@ -16,6 +18,9 @@ const addAlertsCheckbox = document.getElementById('add-alerts');
 const respectHolidaysCheckbox = document.getElementById('respect-holidays');
 const fallbackDownloadSection = document.getElementById('fallback-download');
 const fallbackDownloadBtn = document.getElementById('fallback-download-btn');
+const termSelect = document.getElementById('term-select');
+const summerSessionRow = document.getElementById('summer-session-row');
+const summerSessionSelect = document.getElementById('summer-session-select');
 
 // Calendar option elements
 const appleCalendarOption = document.getElementById('apple-calendar');
@@ -31,6 +36,8 @@ extractBtn.addEventListener('click', extractSchedule);
 exportBtn.addEventListener('click', exportCalendar);
 resetBtn.addEventListener('click', resetApp);
 fallbackDownloadBtn.addEventListener('click', manualDownload);
+termSelect.addEventListener('change', handleTermSelectionChange);
+summerSessionSelect.addEventListener('change', handleSummerSessionChange);
 
 // Calendar option selection listeners
 appleCalendarOption.addEventListener('click', () => selectCalendarType('apple'));
@@ -38,24 +45,120 @@ googleCalendarOption.addEventListener('click', () => selectCalendarType('google'
 outlookCalendarOption.addEventListener('click', () => selectCalendarType('outlook'));
 
 // Initialize the application
-async function init() {
+function init() {
   try {
+    extractBtn.disabled = true;
+
     // Set default calendar selection
     selectCalendarType('apple');
     
-    // Fetch academic calendar data from background script
-    const response = await sendMessageToBackground({action: "getAcademicCalendar"});
-    
-    if (response.success) {
-      academicCalendar = response.data;
-      console.log("Academic calendar loaded:", academicCalendar);
-    } else {
-      showError("Failed to load academic calendar: " + response.error);
-    }
+    calendarCatalog = {
+      timeZone: calendarService.timeZone,
+      supportEndDate: calendarService.supportEndDate,
+      availableTerms: calendarService.getAvailableTerms()
+    };
+    populateTermSelect(calendarCatalog.availableTerms);
   } catch (error) {
     console.error("Error initializing app:", error);
     showError("Error initializing extension: " + error.message);
   }
+}
+
+function populateTermSelect(availableTerms) {
+  termSelect.innerHTML = '';
+
+  if (!availableTerms || availableTerms.length === 0) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No supported terms available';
+    termSelect.appendChild(option);
+    termSelect.disabled = true;
+    summerSessionRow.classList.add('hidden');
+    extractBtn.disabled = true;
+    showError('No supported academic terms are available. Update the academic calendar before using the extension.');
+    return;
+  }
+
+  availableTerms.forEach(term => {
+    const option = document.createElement('option');
+    option.value = term.id;
+    option.textContent = term.label;
+    termSelect.appendChild(option);
+  });
+
+  termSelect.disabled = false;
+  handleTermSelectionChange();
+}
+
+function getSelectedTermDescriptor() {
+  if (!calendarCatalog || !calendarCatalog.availableTerms) return null;
+  return calendarCatalog.availableTerms.find(term => term.id === termSelect.value) || null;
+}
+
+function updateExtractButtonState() {
+  const selectedTerm = getSelectedTermDescriptor();
+  extractBtn.disabled = !selectedTerm || (
+    selectedTerm.season === 'summer' && !summerSessionSelect.value
+  );
+}
+
+function handleTermSelectionChange() {
+  academicCalendar = null;
+  generatedCalendarData = null;
+
+  const selectedTerm = getSelectedTermDescriptor();
+  if (!selectedTerm) {
+    summerSessionRow.classList.add('hidden');
+    updateExtractButtonState();
+    return;
+  }
+
+  if (selectedTerm.season !== 'summer') {
+    summerSessionRow.classList.add('hidden');
+    summerSessionSelect.innerHTML = '';
+    updateExtractButtonState();
+    return;
+  }
+
+  summerSessionSelect.innerHTML = '';
+  const prompt = document.createElement('option');
+  prompt.value = '';
+  prompt.textContent = 'Choose a Summer session…';
+  prompt.disabled = true;
+  prompt.selected = true;
+  summerSessionSelect.appendChild(prompt);
+
+  selectedTerm.sessions.forEach(session => {
+    const option = document.createElement('option');
+    option.value = session.id;
+    option.textContent = session.label;
+    summerSessionSelect.appendChild(option);
+  });
+
+  summerSessionRow.classList.remove('hidden');
+  updateExtractButtonState();
+}
+
+function handleSummerSessionChange() {
+  academicCalendar = null;
+  generatedCalendarData = null;
+  updateExtractButtonState();
+}
+
+function resolveSelectedAcademicCalendar() {
+  const selectedTerm = getSelectedTermDescriptor();
+  if (!selectedTerm) throw new Error('Select a supported academic term.');
+
+  const summerSessionId = selectedTerm.season === 'summer'
+    ? summerSessionSelect.value
+    : null;
+
+  if (selectedTerm.season === 'summer' && !summerSessionId) {
+    throw new Error('Select a 3-week, 4-week, or 8-week Summer session.');
+  }
+
+  academicCalendar = calendarService.getTerm(selectedTerm.id, summerSessionId);
+  return academicCalendar;
 }
 
 // Function to handle calendar type selection
@@ -167,20 +270,18 @@ function generateCalendarData() {
   cal = new ics();
   console.log("Calendar object created");
   
-  // Get academic calendar data
-  const academicCalendar = getAcademicCalendar();
+  // Use the exact term/session configuration resolved before extraction.
+  const selectedAcademicCalendar = requireSelectedAcademicCalendar();
   
   // Get user options
   const respectHolidays = respectHolidaysCheckbox.checked;
   const addAlerts = addAlertsCheckbox.checked;
-  const selectedTerm = document.getElementById('term-select').value;
   const selectedTermLabel = document.getElementById('selected-term-label');
   if (selectedTermLabel) {
-    const labelMap = { fall2025: 'Fall 2025', spring2026: 'Spring 2026', summer2025: 'Summer 2025', summer2026: 'Summer 2026' };
-    selectedTermLabel.textContent = labelMap[selectedTerm] || selectedTerm;
+    selectedTermLabel.textContent = selectedAcademicCalendar.label;
   }
   
-  console.log(`Selected term: ${selectedTerm}`);
+  console.log(`Selected term: ${selectedAcademicCalendar.label}`);
   
   // Process each course
   extractedCourses.forEach(course => {
@@ -188,7 +289,7 @@ function generateCalendarData() {
     
     // Process the main section if available
     if (course.schedule && course.dates) {
-      processSection(course, course.schedule, course.location, course.dates, addAlerts, respectHolidays, academicCalendar);
+      processSection(course, course.schedule, course.location, course.dates, addAlerts, respectHolidays, selectedAcademicCalendar);
     } else {
       console.warn(`Course ${course.name} has incomplete schedule data`);
     }
@@ -204,14 +305,14 @@ function generateCalendarData() {
             `${section.type} ${section.number} - ${section.location}` : 
             `${section.type} ${section.number}`;
             
-          processSection(course, section.schedule, sectionLocation, section.dates || course.dates, addAlerts, respectHolidays, academicCalendar);
+          processSection(course, section.schedule, sectionLocation, section.dates || course.dates, addAlerts, respectHolidays, selectedAcademicCalendar);
         }
       });
     }
     
     // Add final exam if available
     if (course.finalExam) {
-      processFinalExam(course, academicCalendar, addAlerts);
+      processFinalExam(course, selectedAcademicCalendar, addAlerts);
     }
   });
   
@@ -418,12 +519,15 @@ async function extractSchedule() {
   extractBtn.disabled = true;
   
   try {
+    const selectedAcademicCalendar = await resolveSelectedAcademicCalendar();
+    generatedCalendarData = null;
+
     // Get current active tab
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     
     // Check if we're on the right page
-    if (!tab.url.includes("mumaaenroll.services.wisc.edu")) {
-      throw new Error("Please navigate to the UW-Madison enrollment page first.");
+    if (!isCourseScheduleUrl(tab.url)) {
+      throw new Error("Please navigate to the UW-Madison Course Schedule page first.");
     }
     
     // Content scripts are already loaded via manifest.json
@@ -431,12 +535,11 @@ async function extractSchedule() {
     
     // Send message to content script with error handling
     try {
-      const selectedTerm = document.getElementById('term-select').value;
-      console.log(`Sending selected term to content script: ${selectedTerm}`);
+      console.log(`Sending selected term to content script: ${selectedAcademicCalendar.label}`);
       
-      const response = await sendMessageToTab(tab.id, {
+      const response = await sendMessageToScheduleTab(tab.id, {
         action: "extractSchedule",
-        selectedTerm: selectedTerm
+        termConfig: selectedAcademicCalendar
       });
       
       if (response.success) {
@@ -449,8 +552,7 @@ async function extractSchedule() {
         // Update selected term heading label
         const selectedTermLabel = document.getElementById('selected-term-label');
         if (selectedTermLabel) {
-          const labelMap = { fall2025: 'Fall 2025', spring2026: 'Spring 2026', summer2025: 'Summer 2025', summer2026: 'Summer 2026' };
-          selectedTermLabel.textContent = labelMap[selectedTerm] || selectedTerm;
+          selectedTermLabel.textContent = selectedAcademicCalendar.label;
         }
         
         // Show results view
@@ -458,20 +560,16 @@ async function extractSchedule() {
         resultsView.classList.remove('hidden');
       } else {
         showError("Failed to extract schedule: " + response.error);
-        extractBtn.disabled = false;
+        updateExtractButtonState();
       }
     } catch (error) {
-      if (error.message.includes("receiving end does not exist")) {
-        showError("Cannot connect to the page. Please ensure you're on the UW-Madison course schedule page and reload the extension.");
-      } else {
-        showError("Error: " + error.message);
-      }
-      extractBtn.disabled = false;
+      showError("Error: " + error.message);
+      updateExtractButtonState();
     }
   } catch (error) {
     console.error("Error extracting schedule:", error);
     showError("Error: " + error.message);
-    extractBtn.disabled = false;
+    updateExtractButtonState();
   }
 }
 
@@ -652,29 +750,28 @@ function displayCourses(courses) {
 }
 
 // Helper to compute exclude dates (EXDATE) at event start time for matching holidays
-function computeExcludeDates(academicCalendar, dayNumber, startHour, startMinute) {
+function computeExcludeDates(academicCalendar, dayNumber, startHour, startMinute, rangeStart, rangeEnd) {
   const excludeDates = [];
   if (!academicCalendar || !academicCalendar.holidays) return excludeDates;
 
   academicCalendar.holidays.forEach(holiday => {
-    if (holiday.date) {
-      const d = new Date(holiday.date);
-      if (d.getDay() === dayNumber) {
-        d.setHours(startHour, startMinute, 0, 0);
-        excludeDates.push(new Date(d));
+    const holidayStart = holiday.startDate || holiday.date;
+    const holidayEnd = holiday.endDate || holiday.date;
+    if (!holidayStart || !holidayEnd) return;
+
+    const cursor = parseISODateLocal(holidayStart);
+    const end = parseISODateLocal(holidayEnd);
+    while (cursor <= end) {
+      if (
+        cursor >= rangeStart &&
+        cursor <= rangeEnd &&
+        cursor.getDay() === dayNumber
+      ) {
+        const ex = new Date(cursor);
+        ex.setHours(startHour, startMinute, 0, 0);
+        excludeDates.push(ex);
       }
-    } else if (holiday.startDate && holiday.endDate) {
-      const start = new Date(holiday.startDate);
-      const end = new Date(holiday.endDate);
-      const cursor = new Date(start);
-      while (cursor <= end) {
-        if (cursor.getDay() === dayNumber) {
-          const ex = new Date(cursor);
-          ex.setHours(startHour, startMinute, 0, 0);
-          excludeDates.push(ex);
-        }
-        cursor.setDate(cursor.getDate() + 1);
-      }
+      cursor.setDate(cursor.getDate() + 1);
     }
   });
 
@@ -734,7 +831,14 @@ function processSection(course, schedule, location, dates, addAlerts, respectHol
       const dayNumber = getDayNumber(dayOfWeek);
 
       const excludeDates = respectHolidays
-        ? computeExcludeDates(academicCalendar, dayNumber, startHour, startMinute)
+        ? computeExcludeDates(
+            academicCalendar,
+            dayNumber,
+            startHour,
+            startMinute,
+            courseStartDate,
+            courseEndDate
+          )
         : [];
 
       addRecurringEvent(
@@ -796,7 +900,7 @@ function resetApp() {
   resultsView.classList.add('hidden');
   statusEl.textContent = '';
   statusEl.className = 'status';
-  extractBtn.disabled = false;
+  updateExtractButtonState();
 }
 
 // Helper function to get month number from name
@@ -868,19 +972,6 @@ function showError(message) {
   statusEl.className = "status error";
 }
 
-// Helper function to send a message to the background script
-function sendMessageToBackground(message) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, response => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-      } else {
-        resolve(response);
-      }
-    });
-  });
-}
-
 // Helper function to send a message to a tab
 function sendMessageToTab(tabId, message) {
   return new Promise((resolve, reject) => {
@@ -894,8 +985,41 @@ function sendMessageToTab(tabId, message) {
   });
 }
 
+function isCourseScheduleUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === 'mumaaenroll.services.wisc.edu' && (
+      parsed.pathname === '/courses-schedule' ||
+      parsed.pathname.startsWith('/courses-schedule/')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isMissingMessageReceiver(error) {
+  const message = String(error?.message || error).toLowerCase();
+  return message.includes('receiving end does not exist') ||
+    message.includes('could not establish connection');
+}
+
+async function sendMessageToScheduleTab(tabId, message) {
+  try {
+    return await sendMessageToTab(tabId, message);
+  } catch (error) {
+    if (!isMissingMessageReceiver(error)) throw error;
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['courseDataExtractor.js', 'content.js']
+    });
+
+    return sendMessageToTab(tabId, message);
+  }
+}
+
 // Helper function to parse exam date
-function parseExamDate(dateStr) {
+function parseExamDate(dateStr, defaultYear) {
   try {
     // Handle various date formats
     // Example: "Dec 15, 2023" or "12/15/2023"
@@ -905,7 +1029,7 @@ function parseExamDate(dateStr) {
       const parts = dateStr.split('/');
       const month = parseInt(parts[0]) - 1;
       const day = parseInt(parts[1]);
-      const year = parts[2] ? parseInt(parts[2]) : new Date().getFullYear();
+      const year = parts[2] ? parseInt(parts[2]) : defaultYear;
       return new Date(year, month, day);
     } 
     // Otherwise assume it's in Month DD, YYYY format
@@ -913,7 +1037,7 @@ function parseExamDate(dateStr) {
       const dateParts = dateStr.split(/[,\s]+/);
       const month = getMonthNumber(dateParts[0]);
       const day = parseInt(dateParts[1]);
-      const year = dateParts[2] ? parseInt(dateParts[2]) : new Date().getFullYear();
+      const year = dateParts[2] ? parseInt(dateParts[2]) : defaultYear;
       return new Date(year, month, day);
     }
   } catch (error) {
@@ -935,18 +1059,7 @@ function processFinalExam(course, academicCalendar, addAlerts) {
       return;
     }
     
-    // Parse the exam date
-    const examDateParts = course.finalExam.date.trim().split(/[,\s]+/);
-    const examMonth = getMonthNumber(examDateParts[0]);
-    const examDay = parseInt(examDateParts[1]);
-    
-    // Find current or next year's exam based on month
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const nextYear = currentYear + 1;
-    
-    // Use next year if the exam is in January-May and current month is after July
-    const examYear = (examMonth <= 5 && now.getMonth() > 6) ? nextYear : currentYear;
+    const examDate = parseExamDate(course.finalExam.date, academicCalendar.year);
     
     // Parse the exam time
     // Format: "10:05 AM - 12:05 PM"
@@ -995,9 +1108,6 @@ function processFinalExam(course, academicCalendar, addAlerts) {
       }
     }
     
-    // Create the exam date
-    const examDate = new Date(examYear, examMonth, examDay);
-    
     // Create event objects with time in local time
     const examStart = new Date(examDate);
     examStart.setHours(examStartHour, examStartMinute, 0);
@@ -1022,63 +1132,27 @@ function processFinalExam(course, academicCalendar, addAlerts) {
 }
 
 // Helper function to get the academic calendar data
-function getAcademicCalendar() {
-  // If we already have the academic calendar from initialization, return that
-  if (academicCalendar) {
-
-    
-    return academicCalendar;
+function requireSelectedAcademicCalendar() {
+  if (!academicCalendar) {
+    throw new Error('The selected academic term has not been loaded.');
   }
-  
-  console.log("Using default academic calendar data");
-  
-  // Create the default calendar with the provided dates
-  const defaultCalendar = {
-    semester: {
-      fall: {
-        start: "2025-09-03",
-        end: "2025-12-10"
-      },
-      spring: {
-        start: "2026-01-20",
-        end: "2026-05-01"
-      }
-    },
-    holidays: [
-      {
-        name: "Labor Day",
-        date: "2025-09-01"
-      },
-      {
-        name: "Thanksgiving Recess",
-        startDate: "2025-11-27",
-        endDate: "2025-11-30"
-      },
-      {
-        name: "Spring Break",
-        startDate: "2026-03-21",
-        endDate: "2026-03-29"
-      },
-      {
-        name: "Martin Luther King Jr. Day",
-        date: "2026-01-19"
-      }
-    ],
-    dstChanges: {
-      fall: "2025-11-02",
-      spring: "2026-03-09"
-    }
-  };
-  
+  return academicCalendar;
+}
 
-  
-  return defaultCalendar;
-} 
+function parseISODateLocal(isoDate) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) throw new Error(`Invalid academic calendar date: ${isoDate}`);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
 
-// Helper function to parse date strings like "Sep 3, 2025"
+// Helper function to parse date strings like "Sep 2, 2026"
 function parseDateString(dateStr) {
   try {
-    // Handle format like "Sep 3, 2025"
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return parseISODateLocal(dateStr);
+    }
+
+    // Handle format like "Sep 2, 2026"
     const match = dateStr.match(/(\w+)\s+(\d+),\s+(\d+)/);
     if (match) {
       const monthName = match[1];
@@ -1102,4 +1176,4 @@ function parseDateString(dateStr) {
     console.error("Error parsing date string:", dateStr, error);
     return new Date(dateStr);
   }
-} 
+}

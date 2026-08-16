@@ -39,38 +39,90 @@ var ics = function(uidDomain, prodId) {
     'END:VTIMEZONE'
   ].join(SEPARATOR);
   var calendarEnd = SEPARATOR + 'END:VCALENDAR';
+  var CALENDAR_TIME_ZONE = 'America/Chicago';
 
   // --------- Helpers / Fixes ----------
-
-  // Default semester end (local Central time). Adjust if needed.
-  var DEFAULT_SEMESTER_END_LOCAL = new Date('2025-12-19T23:59:59-06:00');
 
   function toDate(x) {
     if (x instanceof Date) return new Date(x.getTime());
     if (typeof x === 'number') return new Date(x);     // epoch ms
-    if (typeof x === 'string') return new Date(x);      // ISO-ish
+    if (typeof x === 'string') {
+      var dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x);
+      if (dateOnly) {
+        return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+      }
+      return new Date(x);                              // ISO-ish
+    }
     throw new Error('Invalid date input: ' + x);
   }
 
-  // If caller didn't provide COUNT or UNTIL, apply default UNTIL (semester end)
+  function timeZoneParts(date, timeZone) {
+    var values = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(date).forEach(function(part) {
+      if (part.type !== 'literal') values[part.type] = Number(part.value);
+    });
+    return values;
+  }
+
+  function zonedDateTimeToUTC(year, month, day, hour, minute, second, timeZone) {
+    var target = Date.UTC(year, month - 1, day, hour, minute, second);
+    var result = new Date(target);
+
+    // Iterate to account for the Central time DST offset on the target date.
+    for (var i = 0; i < 3; i++) {
+      var observed = timeZoneParts(result, timeZone);
+      var observedAsUTC = Date.UTC(
+        observed.year,
+        observed.month - 1,
+        observed.day,
+        observed.hour,
+        observed.minute,
+        observed.second
+      );
+      var adjustment = target - observedAsUTC;
+      if (adjustment === 0) break;
+      result = new Date(result.getTime() + adjustment);
+    }
+
+    return result;
+  }
+
+  function localDateParts(value) {
+    if (typeof value === 'string') {
+      var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+      if (match) {
+        return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+      }
+    }
+
+    var date = toDate(value);
+    return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
+  }
+
   function computeUntilUTC(recurrenceRule) {
     if (recurrenceRule && recurrenceRule.until) {
-      var d = toDate(recurrenceRule.until);
-      d.setHours(23, 59, 59, 0); // include last day
-      return formatDateUTC(d);
+      var parts = localDateParts(recurrenceRule.until);
+      return formatDateUTC(zonedDateTimeToUTC(
+        parts.year,
+        parts.month,
+        parts.day,
+        23,
+        59,
+        59,
+        CALENDAR_TIME_ZONE
+      ));
     }
-    // If COUNT is provided, don't force UNTIL (RFC recommends not mixing)
-    if (recurrenceRule && recurrenceRule.count) return null;
-
-    // No until/count provided -> default to semester end
-    var def = new Date(DEFAULT_SEMESTER_END_LOCAL.getTime());
-    def.setHours(23, 59, 59, 0);
-    return formatDateUTC(def);
+    return null;
   }
 
   // Build an EXDATE at the same local time-of-day as event start, on holiday date
   function exdateAtLocalStart(holidayYMD, eventLocalStart) {
-    var base = toDate(holidayYMD);       // e.g., '2025-11-27'
+    var base = toDate(holidayYMD);       // e.g., '2026-11-26'
     var start = toDate(eventLocalStart); // actual event start
     base.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
     return formatDate(base);             // local YYYYMMDDTHHMMSS
@@ -156,7 +208,7 @@ var ics = function(uidDomain, prodId) {
      *       interval?: number,
      *       byday?: string[] // e.g., ['MO','WE','FR']
      *     }
-     *   - holidays?: string[] // e.g., ['2025-11-27','2025-11-28']
+     *   - holidays?: string[] // e.g., ['2026-11-26','2026-11-27']
      *   - excludeDates?: (Date|string|number)[]
      *   - alarms?: [{ action: 'display', trigger: { minutes?: number, before?: boolean, date?: Date|string|number } }]
      */
@@ -261,3 +313,7 @@ var ics = function(uidDomain, prodId) {
     }
   };
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = ics;
+}

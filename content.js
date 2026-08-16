@@ -1,16 +1,15 @@
 // Content script to extract course data from the UW-Madison enrollment page
 
-console.log("UW-Madison Schedule Extractor loaded");
+console.log("Bucky Scheduler 2.0 academic-calendar extractor loaded");
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "extractSchedule") {
     try {
-      // Extract course data with selected term
-      const selectedTerm = request.selectedTerm || null;
-      console.log(`Content script received selected term: ${selectedTerm}`);
+      const termConfig = request.termConfig || null;
+      console.log(`Content script received selected term: ${termConfig?.label || 'none'}`);
       
-      const courseData = extractCourseData(selectedTerm);
+      const courseData = extractCourseData(termConfig);
       sendResponse({success: true, data: courseData});
     } catch (error) {
       console.error("Error extracting course data:", error);

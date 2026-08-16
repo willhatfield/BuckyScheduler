@@ -14,11 +14,13 @@
       </p>
       <div class="option-row">
         <label for="term-select">Select Term:</label>
-        <select id="term-select">
-          <option value="summer2025">Summer 2025</option>
-          <option value="fall2025" selected>Fall 2025</option>
-          <option value="spring2026">Spring 2026</option>
+        <select id="term-select" disabled>
+          <option value="">Loading terms…</option>
         </select>
+      </div>
+      <div id="summer-session-row" class="option-row hidden">
+        <label for="summer-session-select">Select Session:</label>
+        <select id="summer-session-select"></select>
       </div>
       <button id="extract-btn">Download</button>
       <div id="status" class="status"></div>
@@ -112,7 +114,8 @@
     </div>
   </div>
 
+  <script src="academicCalendar.js"></script>
   <script src="ics.js"></script>
   <script src="popup.js"></script>
 </body>
-</html> 
+</html>
